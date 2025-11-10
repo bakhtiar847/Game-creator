@@ -281,8 +281,10 @@
 			constructor(data){
 				super(data);
 				this.actions = this.actions || [];
+				// allow both Q (default interact) and C to climb
 				this.actions.push({key:'c', name:'climb'});
-				this.climbHeight = data && typeof data.climbHeight !== 'undefined' ? data.climbHeight : -60;
+				this.actions.push({key:'q', name:'climb'});
+				this.climbHeight = data && typeof data.climbHeight !== 'undefined' ? data.climbHeight : 60;
 			}
 		}
 
@@ -351,15 +353,18 @@
 		// create a ladder and a floating platform next to it
 		const ladderId = Date.now() + 1;
 		const ladder = new Ladder({ id: ladderId, name:'Ladder', x: 200, y:0, z: 520, color:'#c68642', world:0 });
-		// ladder represented by a thin tall tetrahedron
-		ladder.tetrahedrons = [ { a:{x:194,y:0,z:516}, b:{x:206,y:0,z:516}, c:{x:206,y:-120,z:524}, d:{x:194,y:-120,z:524} } ];
+		// ladder represented by a thin tall tetrahedron (top is positive Y)
+		ladder.tetrahedrons = [ { a:{x:194,y:0,z:516}, b:{x:206,y:0,z:516}, c:{x:206,y:80,z:524}, d:{x:194,y:80,z:524} } ];
 		objects.push(ladder);
 
 		// floating platform next to ladder
 		const platId = Date.now() + 2;
-		const platform = new WorldObject({ id: platId, name:'Platform', x: 200, y:-128, z: 560, color:'#64748b', world:0 });
-		// platform as a flat tetrahedron-ish prism
-		platform.tetrahedrons = [ { a:{x:180,y:-128,z:540}, b:{x:220,y:-128,z:540}, c:{x:220,y:-120,z:580}, d:{x:180,y:-120,z:580} } ];
+		const platform = new WorldObject({ id: platId, name:'Platform', x: 200, y:80, z: 560, color:'#64748b', world:0 });
+		// platform as a flat tetrahedron-ish prism elevated above ground
+		platform.tetrahedrons = [ { a:{x:180,y:78,z:540}, b:{x:220,y:78,z:540}, c:{x:220,y:82,z:580}, d:{x:180,y:82,z:580} } ];
+		objects.push(platform);
+		// set ladder climb height to platform top
+		ladder.climbHeight = platform.y + 4;
 		objects.push(platform);
 
 		// portal between worlds (world 0 <-> world 1)
@@ -982,16 +987,17 @@
 			}
 
 			// gravity
-			const GRAV = 900; // units/s^2
-			player.vel.y += GRAV * dt * 1; // downward positive
-			player.y += player.vel.y * dt;
-			// ground at y=0
-			if(player.y >= 0){ player.y = 0; player.vel.y = 0; player.onGround = true; }
+			// gravity (positive Y is up). Use negative gravity to pull downwards.
+			const GRAV = -900; // units/s^2 (acceleration)
+			player.vel.y += GRAV * dt; // velocity affected by gravity
+			player.y += player.vel.y * dt; // integrate
+			// ground at y = 0 (player cannot go below 0)
+			if(player.y <= 0){ player.y = 0; player.vel.y = 0; player.onGround = true; }
 			else{ player.onGround = false; }
 
-			// jump (space)
+			// jump (space): give an upward positive impulse
 			if(keysDown.has(' ' ) || keysDown.has('space') ){
-				if(player.onGround){ player.vel.y = -player.jumpImpulse; player.onGround = false; }
+				if(player.onGround){ player.vel.y = player.jumpImpulse; player.onGround = false; }
 			}
 
 			// animate chest lids towards their target angles
@@ -1053,8 +1059,10 @@
 			if(name === 'climb' || key === 'c'){
 				// move player to top of ladder / platform
 				player.x = obj.x;
-				player.z = obj.z + 40; // jump forward onto platform area
-				player.y = (obj.climbHeight || -60);
+				// place player on the far side of the ladder
+				player.z = obj.z + 60;
+				// set player to climb height (top of ladder / platform)
+				player.y = (obj.climbHeight || 60);
 				player.vel.y = 0;
 				showPickup('Climbed ladder');
 				saveState(); refresh();
