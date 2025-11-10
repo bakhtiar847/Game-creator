@@ -35,10 +35,7 @@
 	<div class="container">
 		<header>
 			<h1>Player — Objects Preview</h1>
-			<div class="toolbar">
-				<button id="addBtn">Add random object</button>
-				<button id="toggleOverlay">Toggle overlay</button>
-			</div>
+			<div class="toolbar"></div>
 		</header>
 
 		<main>
@@ -46,20 +43,6 @@
 				<canvas id="canvas" aria-label="3D canvas renderer"></canvas>
 				<div class="grid" aria-hidden="true"></div>
 			</section>
-
-			<!-- overlay: object details + list -->
-			<aside class="overlay" id="overlay">
-				<h2>Objects</h2>
-				<div class="meta">Click an object on the stage to view details here.</div>
-				<div class="object-list" id="objectList" role="list"></div>
-				<div style="margin-top:8px;display:flex;gap:8px;justify-content:space-between;align-items:center">
-					<div class="muted" id="selectedInfo">No selection</div>
-					<div style="display:flex;gap:8px">
-						<button id="centerBtn">Center selected</button>
-						<button id="clearBtn">Clear objects</button>
-					</div>
-				</div>
-			</aside>
 		</main>
 
 		<footer>
@@ -132,6 +115,7 @@
 		}
 		player.vel = {x:0,y:0,z:0};
 		player.speed = 120; // units per second
+		player.radius = 28; // collision radius in world units
 		player.jumpImpulse = 320;
 		player.onGround = false;
 
@@ -256,11 +240,20 @@
 				for(const item of projected){
 					const o = item.o, p = item.p; const size = 56 * p.scale;
 					ctx.save(); ctx.translate(p.x,p.y);
-					const shade = Math.max(0.2, Math.min(1, 1 - (p.z/2000)));
-					ctx.fillStyle = shadeColor(o.color||'#06b6d4', shade);
-					roundedRect(ctx, -size/2, -size/2, size, size, Math.max(4, size*0.12)); ctx.fill();
-					ctx.fillStyle = '#042028'; ctx.font = `${Math.max(10, 12 * p.scale)}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
-					ctx.fillText(o.name[0]||'?',0,0);
+					// draw either texture (if available) or circle placeholder
+					if(o.texture && o.texture.complete){
+						const img = o.texture;
+						const aspect = img.width / img.height || 1;
+						const h = Math.max(8, size);
+						const w = Math.max(8, h * aspect);
+						ctx.drawImage(img, -w/2, -h/2, w, h);
+					} else {
+						const shade = Math.max(0.2, Math.min(1, 1 - (p.z/2000)));
+						ctx.fillStyle = shadeColor(o.color||'#06b6d4', shade);
+						ctx.beginPath(); ctx.arc(0,0,Math.max(6,size/2),0,Math.PI*2); ctx.fill();
+						ctx.fillStyle = '#042028'; ctx.font = `${Math.max(10, 12 * p.scale)}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+						ctx.fillText(o.name[0]||'?',0,0);
+					}
 					if(selectedId === o.id){ ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.stroke(); }
 					ctx.restore();
 				}
@@ -308,6 +301,76 @@
 			return (ax * (by*cz - bz*cy) - ay * (bx*cz - bz*cx) + az * (bx*cy - by*cx)) / 6;
 		}
 
+		// compute squared distance from point p to triangle (a,b,c)
+		function pointToTriangleDist2(p,a,b,c){
+			// from Real-Time Collision Detection: find closest point on triangle to p
+			const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z;
+			const acx = c.x - a.x, acy = c.y - a.y, acz = c.z - a.z;
+			const apx = p.x - a.x, apy = p.y - a.y, apz = p.z - a.z;
+
+			const d1 = abx*apx + aby*apy + abz*apz;
+			const d2 = acx*apx + acy*apy + acz*apz;
+			if(d1 <= 0 && d2 <= 0) return apx*apx + apy*apy + apz*apz; // barycentric (1,0,0)
+
+			const bpx = p.x - b.x, bpy = p.y - b.y, bpz = p.z - b.z;
+			const d3 = abx*bpx + aby*bpy + abz*bpz;
+			const d4 = acx*bpx + acy*bpy + acz*bpz;
+			if(d3 >= 0 && d4 <= d3) return bpx*bpx + bpy*bpy + bpz*bpz; // barycentric (0,1,0)
+
+			const vc = d1*d4 - d3*d2;
+			if(vc <= 0 && d1 >= 0 && d3 <= 0){
+				const v = d1 / (d1 - d3);
+				const projx = a.x + v * abx, projy = a.y + v * aby, projz = a.z + v * abz;
+				const dx = p.x - projx, dy = p.y - projy, dz = p.z - projz;
+				return dx*dx + dy*dy + dz*dz;
+			}
+
+			const cpx = p.x - c.x, cpy = p.y - c.y, cpz = p.z - c.z;
+			const d5 = abx*cpx + aby*cpy + abz*cpz;
+			const d6 = acx*cpx + acy*cpy + acz*cpz;
+			if(d6 >= 0 && d5 <= d6) return cpx*cpx + cpy*cpy + cpz*cpz; // barycentric (0,0,1)
+
+			const vb = d5*d2 - d1*d6;
+			if(vb <= 0 && d2 >= 0 && d6 <= 0){
+				const w = d2 / (d2 - d6);
+				const projx = a.x + w * acx, projy = a.y + w * acy, projz = a.z + w * acz;
+				const dx = p.x - projx, dy = p.y - projy, dz = p.z - projz;
+				return dx*dx + dy*dy + dz*dz;
+			}
+
+			const va = d3*d6 - d5*d4;
+			if(va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0){
+				const bcx = c.x - b.x, bcy = c.y - b.y, bcz = c.z - b.z;
+				const d43 = d4 - d3, d56 = d5 - d6;
+				const w = d43 / (d43 + d56);
+				const projx = b.x + w * bcx, projy = b.y + w * bcy, projz = b.z + w * bcz;
+				const dx = p.x - projx, dy = p.y - projy, dz = p.z - projz;
+				return dx*dx + dy*dy + dz*dz;
+			}
+
+			// inside face region. compute distance to plane
+			const normalX = aby*acz - abz*acy;
+			const normalY = abz*acx - abx*acz;
+			const normalZ = abx*acy - aby*acx;
+			const nlen2 = normalX*normalX + normalY*normalY + normalZ*normalZ;
+			if(nlen2 === 0) return apx*apx + apy*apy + apz*apz;
+			const dist = (apx*normalX + apy*normalY + apz*normalZ) / Math.sqrt(nlen2);
+			return dist*dist;
+		}
+
+		function sphereIntersectsTetra(center, radius, tet){
+			// if center inside tetra -> intersect
+			if(pointInTetra(center, tet)) return true;
+			const r2 = radius*radius;
+			// check distance to each triangular face
+			const faces = [[tet.a,tet.b,tet.c],[tet.a,tet.b,tet.d],[tet.a,tet.c,tet.d],[tet.b,tet.c,tet.d]];
+			for(const f of faces){
+				const d2 = pointToTriangleDist2(center, f[0], f[1], f[2]);
+				if(d2 <= r2 + 1e-6) return true;
+			}
+			return false;
+		}
+
 		function pointInTetra(pt, tet){
 			// using barycentric volumes: point is inside if all sub-volumes have same sign and sum equals vol
 			const v = signedTetraVolume(tet.a,tet.b,tet.c,tet.d);
@@ -327,12 +390,12 @@
 		}
 
 		function isBlockedByWorld(pos){
-			// pos: {x,y,z}
+			// pos: {x,y,z} center of player sphere
 			for(const obj of objects){
 				if(!(obj.isworld || obj.iswall)) continue;
 				if(!obj.tetrahedrons) continue;
 				for(const tet of obj.tetrahedrons){
-					if(pointInTetra(pos,tet)) return true;
+					if(sphereIntersectsTetra(pos, player.radius, tet)) return true;
 				}
 			}
 			return false;
