@@ -59,6 +59,24 @@
 			<div id="selectedInfo" class="muted">No selection</div>
 		</div>
 
+		<!-- pause menu -->
+		<div id="pauseMenu" style="display:none; position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(2,6,23,0.9);color:#e6eef6;padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);z-index:40;min-width:260px;text-align:center">
+			<h3 style="margin:0 0 8px 0">Paused</h3>
+			<div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px">
+				<button id="pauseInventoryBtn">Inventory</button>
+				<button id="resumeBtn">Resume</button>
+				<button id="saveBtn">Save</button>
+			</div>
+			<div id="pauseInfo" class="muted">Press Esc to resume.</div>
+		</div>
+
+		<!-- inventory panel (used by pause menu) -->
+		<div id="inventoryPanel" style="display:none; position:fixed;right:18px;top:80px;background:rgba(2,6,23,0.9);color:#e6eef6;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);z-index:45;min-width:220px">
+			<h4 style="margin:0 0 8px 0">Inventory</h4>
+			<div id="inventoryList" style="max-height:300px;overflow:auto"></div>
+			<div style="margin-top:8px;text-align:right"><button id="closeInventoryBtn">Close</button></div>
+		</div>
+
 		<footer>
 			This demo renders an objects array and shows an overlay with details. Open this file in a browser to interact.
 		</footer>
@@ -116,8 +134,28 @@
 				actions:[{key:'q',name:'open'}, {key:'z',name:'special'}],
 				isworld:false,
 				iswall:false,
-				color:'#f59e0b',
+				color:'#8B5A2B',
 				description:'A treasure chest with loot.'
+			},
+			// a simple tree near the chest
+			{
+				id:5,
+				name:'Tree',
+				x:360,y:0,z:540,
+				triangles:[],
+				// trunk and canopy approximated by tetrahedrons
+				tetrahedrons:[
+					// trunk - thin tall tetra
+					{a:{x:354,y:0,z:536},b:{x:366,y:0,z:536},c:{x:366,y:40,z:544},d:{x:354,y:40,z:544}},
+					// canopy - three tetrahedrons forming a rough leafy mass
+					{a:{x:340,y:40,z:520},b:{x:380,y:40,z:520},c:{x:360,y:80,z:540},d:{x:360,y:55,z:500}},
+					{a:{x:340,y:45,z:560},b:{x:380,y:45,z:560},c:{x:360,y:85,z:540},d:{x:360,y:60,z:580}}
+				],
+				actions:[],
+				isworld:false,
+				iswall:false,
+				color:'#16a34a',
+				description:'A tree with trunk and leafy canopy.'
 			}
 		];
 
@@ -205,8 +243,11 @@
 		// input state
 		const keysDown = new Set();
 
-		// simple inventory
-		let inventoryOpen = false;
+		// inventory system
+		let inventoryOpen = false; // toggles inventory panel
+		let inventory = []; // array of items: {id,name,qty}
+
+		let paused = false;
 
 
 		const stage = document.getElementById('stage');
@@ -394,7 +435,8 @@
 						// lid: rotate verts around hinge (back top edge)
 						if(obj._lidTemplate){
 							const lid = obj._lidTemplate; const dims = obj._chestDims;
-							const hingeY = dims.h; const hingeZ = -dims.hd; // local hinge
+							// hinge along the back/top edge: use positive hd so lid opens upward (away from base)
+							const hingeY = dims.h; const hingeZ = dims.hd; // local hinge (front/back side)
 							const angle = obj.lidAngle || 0;
 							// precompute rotated verts
 							const rotated = [];
@@ -624,6 +666,13 @@
 		document.addEventListener('keydown',(e)=>{
 			if(e.repeat) return;
 			const k = e.key.toLowerCase();
+			// Escape toggles pause
+			if(k === 'escape'){
+				paused = !paused;
+				if(paused){ showPauseMenu(); saveState(); }
+				else { hidePauseMenu(); lastFrame = performance.now(); }
+				return;
+			}
 			keysDown.add(k);
 			// inventory toggle
 			if(k === 'e'){
@@ -631,21 +680,26 @@
 				console.log('Inventory',inventoryOpen);
 			}
 			// interact: if chest is centered, open/close lid on 'q'
-			if(k === 'q'){
-				const obj = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
-				if(obj){
-					if(obj.name && obj.name.toLowerCase() === 'chest'){
-						// toggle open target
-						if(!obj.opened){ obj.opened = true; obj.lidTarget = -Math.PI * 0.65; }
-						else { obj.opened = false; obj.lidTarget = 0; }
-						console.log('Chest state ->', obj.opened ? 'opening' : 'closing');
-					} else {
-						// default interact: add a property interactions++
-						obj.interactions = (obj.interactions||0) + 1;
-						console.log('Interacted with',obj.name,obj.interactions);
+				if(k === 'q'){
+					const obj = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
+					if(obj){
+						if(obj.name && obj.name.toLowerCase() === 'chest'){
+							// toggle open target (positive angle to lift lid)
+							if(!obj.opened){
+								obj.opened = true; obj.lidTarget = Math.PI * 0.65;
+								// collect gold first time
+								if(!obj.collected){ obj.collected = true; inventory.push({id:'gold',name:'Gold',qty:1}); console.log('Collected gold!'); }
+							} else {
+								obj.opened = false; obj.lidTarget = 0;
+							}
+							console.log('Chest state ->', obj.opened ? 'opening' : 'closing');
+						} else {
+							// default interact: add a property interactions++
+							obj.interactions = (obj.interactions||0) + 1;
+							console.log('Interacted with',obj.name,obj.interactions);
+						}
 					}
 				}
-			}
 			// other object-defined keys (zxc... etc)
 			const center = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
 			if(center && center.actions){
@@ -668,6 +722,9 @@
 		function physicsStep(now){
 			const dt = Math.max(0, Math.min(0.05, (now - lastFrame)/1000));
 			lastFrame = now;
+
+			// if paused, skip physics updates but still render pause menu once
+			if(paused){ renderer.render(); requestAnimationFrame(physicsStep); return; }
 
 			// controls: arrows to look (adjust player rotation), WASD to move relative to player rotation
 			// camera rotation (arrow keys) — camera drives player orientation
