@@ -185,7 +185,7 @@
 			return img;
 		}
 
-		// auto-load textures if objects specify textureSrc
+		// auto-load textures only when explicitly requested via textureSrc or isSprite flag
 		for(const o of objects){ if(o.textureSrc) loadTexture(o, o.textureSrc); }
 
 		// --- Chest mesh builder (rectangular prism + curved lid template) ---
@@ -330,20 +330,15 @@
 			return cnv.toDataURL('image/png');
 		}
 
-		// generate cylinder for trees and create color textures for objects lacking textureSrc
+		// generate cylinder for trees. Do NOT auto-create circular sprite textures for every object
 		for(const obj of objects){
 			if(obj.name && obj.name.toLowerCase().includes('tree')){
 				// create trunk cylinder mesh local to object origin
 				buildCylinderMesh(obj, 6, 40, 18);
 			}
-			// if object has a color but no explicit texture, create a small color texture
-			if(obj.color && !obj.textureSrc && !obj.texture){
-				const dataUrl = createColorTextureDataURL(obj.color);
-				// use existing loader to attach image
-				loadTexture(obj, dataUrl);
-			} else if(obj.textureSrc && !obj.texture){
-				loadTexture(obj, obj.textureSrc);
-			}
+			// load texture only if explicitly provided (textureSrc) or marked as sprite/icon
+			if(obj.textureSrc && !obj.texture){ loadTexture(obj, obj.textureSrc); }
+			if(obj.isSprite && obj.color && !obj.texture){ const dataUrl = createColorTextureDataURL(obj.color); loadTexture(obj, dataUrl); }
 		}
 
 		// spawn additional trees using Tree1
@@ -1057,12 +1052,21 @@
 
 			// climb action for Ladder
 			if(name === 'climb' || key === 'c'){
-				// move player to top of ladder / platform
-				player.x = obj.x;
-				// place player on the far side of the ladder
-				player.z = obj.z + 60;
-				// set player to climb height (top of ladder / platform)
-				player.y = (obj.climbHeight || 60);
+				// find nearest platform in same world and move player there
+				let nearest = null; let nd = Infinity;
+				for(const o of objects){
+					if(o.world !== obj.world) continue;
+					if(!o.name) continue;
+					if(!o.name.toLowerCase().includes('platform')) continue;
+					const d = Math.hypot((o.x||0) - (obj.x||0), (o.z||0) - (obj.z||0));
+					if(d < nd){ nd = d; nearest = o; }
+				}
+				if(nearest && nd < 200){
+					player.x = nearest.x; player.z = nearest.z; player.y = (nearest.y || 0) + 4;
+				} else {
+					// fallback: place player slightly in front of ladder
+					player.x = obj.x; player.z = obj.z + 20; player.y = (obj.climbHeight || 60);
+				}
 				player.vel.y = 0;
 				showPickup('Climbed ladder');
 				saveState(); refresh();
@@ -1141,7 +1145,6 @@
 			renderSelectedZControl(obj);
 			// visual highlight handled by renderer using selectedId
 			// ensure overlay visible
-			overlay.style.display = '';
 		}
 
 		// render a Z slider for the selected object inside the overlay
@@ -1194,9 +1197,6 @@
 		}
 
 		// events
-		toggleOverlayBtn.addEventListener('click', ()=>{
-			overlay.style.display = overlay.style.display === 'none' ? '' : 'none';
-		});
 		// pause menu buttons wiring
 		document.getElementById('resumeBtn').addEventListener('click', ()=>{ paused = false; hidePauseMenu(); lastFrame = performance.now(); });
 		document.getElementById('pauseInventoryBtn').addEventListener('click', ()=>{ inventoryOpen = true; document.getElementById('inventoryPanel').style.display = ''; renderInventory(); });
