@@ -88,6 +88,32 @@
 	<script>
 		// Objects now have richer structure:
 		// { id, name, x,y,z (origin), triangles: [{p1:{x,y,z}, p2, p3}], tetrahedrons: [{a,b,c,d}], actions: [{key,name}], flags: isplayer,isworld,iswall }
+
+		// Lightweight classes for game objects and inventory items
+		class GameObject {
+			constructor(data){
+				Object.assign(this, data);
+				this.triangles = this.triangles || [];
+				this.tetrahedrons = this.tetrahedrons || [];
+				this.actions = this.actions || [];
+				this.isplayer = !!this.isplayer;
+				this.isworld = !!this.isworld;
+				this.iswall = !!this.iswall;
+				// runtime/visual fields
+				this.texture = this.texture || null;
+				this._baseTris = this._baseTris || null;
+				this._lidTemplate = this._lidTemplate || null;
+				this._chestDims = this._chestDims || null;
+				this.opened = !!this.opened;
+				this.lidAngle = this.lidAngle || 0;
+				this.lidTarget = this.lidTarget || 0;
+			}
+		}
+
+		class InventoryItem {
+			constructor(id, name, qty = 1){ this.id = id; this.name = name; this.qty = qty; }
+		}
+
 		let objects = [
 			// green floor object (large area under ground)
 			{
@@ -143,33 +169,20 @@
 			// tree split into trunk and canopy so we can color and act on parts separately
 			{
 				id:5,
-				name:'TreeTrunk',
+				name:'Tree',
 				x:360,y:0,z:540,
+				// triangles will be filled with a cylindrical trunk mesh via buildCylinderMesh
 				triangles:[],
-				tetrahedrons:[
-					// trunk - thin tall tetra
-					{a:{x:354,y:0,z:536},b:{x:366,y:0,z:536},c:{x:366,y:40,z:544},d:{x:354,y:40,z:544}}
-				],
-				actions:[{key:'q',name:'cut'}],
-				isworld:true,
-				iswall:true,
-				color:'#8B5A2B',
-				description:'Tree trunk. Press Q to cut.'
-			},
-			{
-				id:6,
-				name:'TreeCanopy',
-				x:360,y:40,z:540,
-				triangles:[],
+				// canopy as tetrahedrons for collision/visual
 				tetrahedrons:[
 					{a:{x:340,y:40,z:520},b:{x:380,y:40,z:520},c:{x:360,y:80,z:540},d:{x:360,y:55,z:500}},
 					{a:{x:340,y:45,z:560},b:{x:380,y:45,z:560},c:{x:360,y:85,z:540},d:{x:360,y:60,z:580}}
 				],
-				actions:[],
+				actions:[{key:'x',name:'cut'}],
 				isworld:true,
 				iswall:true,
-				color:'#16a34a',
-				description:'Tree canopy.'
+				color:'#8B5A2B',
+				description:'Tree with trunk and canopy. Press X to cut.'
 			}
 		];
 
@@ -241,6 +254,67 @@
 
 		// build chest mesh for existing chest objects
 		for(const o of objects){ if(o.name && o.name.toLowerCase() === 'chest') buildChestMesh(o); }
+
+		// Convert plain object literals to GameObject instances
+		objects = objects.map(o => new GameObject(o));
+
+		// helper: build a cylinder mesh (local coords) and store as _baseTris
+		function buildCylinderMesh(obj, radius = 6, height = 40, segments = 12){
+			const vertsTop = [], vertsBot = [];
+			for(let i=0;i<segments;i++){
+				const a = (i / segments) * Math.PI * 2;
+				const x = Math.cos(a) * radius;
+				const z = Math.sin(a) * radius;
+				vertsBot.push({x:x, y:0, z:z});
+				vertsTop.push({x:x, y:height, z:z});
+			}
+			const tris = [];
+			for(let i=0;i<segments;i++){
+				const ni = (i+1) % segments;
+				// two triangles for the quad between segment i and ni
+				tris.push([ vertsBot[i], vertsTop[i], vertsTop[ni] ]);
+				tris.push([ vertsBot[i], vertsTop[ni], vertsBot[ni] ]);
+			}
+			// optional top cap (fan)
+			const centerTop = {x:0,y:height,z:0};
+			for(let i=0;i<segments;i++){
+				const ni = (i+1)%segments;
+				tris.push([ centerTop, vertsTop[i], vertsTop[ni] ]);
+			}
+			obj._baseTris = tris;
+		}
+
+		// create simple color texture (data URL) for small sprites/icons
+		function createColorTextureDataURL(color, w=64, h=64){
+			const cnv = document.createElement('canvas'); cnv.width = w; cnv.height = h;
+			const c = cnv.getContext('2d');
+			// background
+			c.fillStyle = '#0b1220'; c.fillRect(0,0,w,h);
+			// colored circle
+			c.beginPath(); c.arc(w/2, h/2, Math.min(w,h)/2 - 6, 0, Math.PI*2);
+			const grad = c.createRadialGradient(w/2 - 8, h/2 - 8, 4, w/2, h/2, Math.min(w,h)/2);
+			grad.addColorStop(0, '#ffffff'); grad.addColorStop(0.25, color); grad.addColorStop(1, shadeColor(color, 0.6));
+			c.fillStyle = grad; c.fill();
+			// subtle border
+			c.lineWidth = 2; c.strokeStyle = 'rgba(0,0,0,0.25)'; c.stroke();
+			return cnv.toDataURL('image/png');
+		}
+
+		// generate cylinder for trees and create color textures for objects lacking textureSrc
+		for(const obj of objects){
+			if(obj.name && obj.name.toLowerCase().includes('tree')){
+				// create trunk cylinder mesh local to object origin
+				buildCylinderMesh(obj, 6, 40, 18);
+			}
+			// if object has a color but no explicit texture, create a small color texture
+			if(obj.color && !obj.textureSrc && !obj.texture){
+				const dataUrl = createColorTextureDataURL(obj.color);
+				// use existing loader to attach image
+				loadTexture(obj, dataUrl);
+			} else if(obj.textureSrc && !obj.texture){
+				loadTexture(obj, obj.textureSrc);
+			}
+		}
 
 		// find player reference and set up player physics state
 		let player = objects.find(o=>o.isplayer);
@@ -760,7 +834,7 @@
 									obj.collected = true;
 									const existing = inventory.find(it=>it.id === 'gold');
 									if(existing) existing.qty = (existing.qty||0) + 1;
-									else inventory.push({id:'gold',name:'Gold',qty:1});
+									else inventory.push(new InventoryItem('gold','Gold',1));
 									console.log('Collected gold!');
 									showPickup('Picked up Gold');
 								}
@@ -882,9 +956,9 @@
 				const idx = objects.findIndex(o=>o.id === obj.id);
 				if(idx >= 0){
 					// spawn a small wood pickup in inventory and remove object
-					const existing = inventory.find(it=>it.id === 'wood');
-					if(existing) existing.qty = (existing.qty||0) + 1;
-					else inventory.push({id:'wood',name:'Wood',qty:1});
+						const existing = inventory.find(it=>it.id === 'wood');
+						if(existing) existing.qty = (existing.qty||0) + 1;
+						else inventory.push(new InventoryItem('wood','Wood',1));
 					// also remove nearby canopy pieces (tree canopy)
 					const trunkObj = objects[idx];
 					objects.splice(idx,1);
