@@ -360,7 +360,6 @@
 		objects.push(platform);
 		// set ladder climb height to platform top
 		ladder.climbHeight = platform.y + 4;
-		objects.push(platform);
 
 		// portal between worlds (world 0 <-> world 1)
 		const portal = new WorldObject({ id: Date.now()+3, name:'Portal', x: 600, y:0, z: 520, color:'#7c3aed', world:0 });
@@ -946,6 +945,9 @@
 			// if paused, skip physics updates but still render pause menu once
 			if(paused){ renderer.render(); requestAnimationFrame(physicsStep); return; }
 
+			// if climbing animation is active, skip physics updates to allow animation to control position
+			if(player._isClimbing){ renderer.render(); requestAnimationFrame(physicsStep); return; }
+
 			// controls: arrows to look (adjust player rotation), WASD to move relative to player rotation
 			// camera rotation (arrow keys) — camera drives player orientation
 			if(keysDown.has('arrowleft')){ camera.rotY = (camera.rotY || 0) - 2.5 * dt; }
@@ -1050,27 +1052,54 @@
 				return;
 			}
 
-			// climb action for Ladder
+			// climb action for Ladder — animate smoothly to nearest platform top
 			if(name === 'climb' || key === 'c'){
-				// find nearest platform in same world and move player there
+				smoothClimbToNearestPlatform(obj);
+				return;
+			}
+
+			// smooth climb helper
+			function smoothClimbToNearestPlatform(ladderObj){
+				// find nearest platform in same world
 				let nearest = null; let nd = Infinity;
 				for(const o of objects){
-					if(o.world !== obj.world) continue;
+					if(o.world !== ladderObj.world) continue;
 					if(!o.name) continue;
 					if(!o.name.toLowerCase().includes('platform')) continue;
-					const d = Math.hypot((o.x||0) - (obj.x||0), (o.z||0) - (obj.z||0));
+					const d = Math.hypot((o.x||0) - (ladderObj.x||0), (o.z||0) - (ladderObj.z||0));
 					if(d < nd){ nd = d; nearest = o; }
 				}
-				if(nearest && nd < 200){
-					player.x = nearest.x; player.z = nearest.z; player.y = (nearest.y || 0) + 4;
-				} else {
-					// fallback: place player slightly in front of ladder
-					player.x = obj.x; player.z = obj.z + 20; player.y = (obj.climbHeight || 60);
+				let target = { x: ladderObj.x, z: ladderObj.z, y: (ladderObj.climbHeight || 60) };
+				if(nearest && nd < 400){
+					// compute platform top Y by using max vertex Y of its tetrahedrons
+					let topY = -Infinity;
+					if(nearest.tetrahedrons){
+						for(const tet of nearest.tetrahedrons){
+							for(const k of ['a','b','c','d']) topY = Math.max(topY, tet[k].y || -Infinity);
+						}
+					}
+					if(!isFinite(topY)) topY = nearest.y || 0;
+					// place player center above platform by player.radius
+					target.x = nearest.x; target.z = nearest.z; target.y = topY + player.radius + 2;
 				}
-				player.vel.y = 0;
-				showPickup('Climbed ladder');
-				saveState(); refresh();
-				return;
+				// animate from current player pos to target over duration
+				const start = { x: player.x, y: player.y, z: player.z };
+				const dur = 600; const t0 = performance.now(); player._isClimbing = true; player.vel.y = 0;
+				function easeInOut(t){ return t<0.5 ? 2*t*t : -1 + (4-2*t)*t; }
+				function step(now){
+					const p = Math.min(1, (now - t0) / dur);
+					const e = easeInOut(p);
+					player.x = start.x + (target.x - start.x) * e;
+					player.y = start.y + (target.y - start.y) * e;
+					player.z = start.z + (target.z - start.z) * e;
+					renderer.render();
+					if(p < 1){ requestAnimationFrame(step); }
+					else {
+						player._isClimbing = false; player.vel.y = 0; player.onGround = false;
+						showPickup('Climbed ladder'); saveState(); refresh();
+					}
+				}
+				requestAnimationFrame(step);
 			}
 			// other action hooks can go here
 		}
