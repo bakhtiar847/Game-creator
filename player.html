@@ -135,8 +135,8 @@
 				triangles:[],
 				tetrahedrons:[{a:{x:280,y:0,z:480},b:{x:320,y:0,z:480},c:{x:320,y:60,z:520},d:{x:280,y:60,z:520}}],
 				actions:[{key:'q',name:'open'}, {key:'z',name:'special'}],
-				isworld:false,
-				iswall:false,
+				isworld:true,
+				iswall:true,
 				color:'#8B5A2B',
 				description:'A treasure chest with loot.'
 			},
@@ -762,6 +762,7 @@
 									if(existing) existing.qty = (existing.qty||0) + 1;
 									else inventory.push({id:'gold',name:'Gold',qty:1});
 									console.log('Collected gold!');
+									showPickup('Picked up Gold');
 								}
 							} else {
 								obj.opened = false; obj.lidTarget = 0;
@@ -884,7 +885,16 @@
 					const existing = inventory.find(it=>it.id === 'wood');
 					if(existing) existing.qty = (existing.qty||0) + 1;
 					else inventory.push({id:'wood',name:'Wood',qty:1});
+					// also remove nearby canopy pieces (tree canopy)
+					const trunkObj = objects[idx];
 					objects.splice(idx,1);
+					for(let i = objects.length-1; i>=0; i--){
+						const o = objects[i];
+						if(o.name && o.name.toLowerCase().includes('canopy')){
+							const dx = (o.x||0) - (trunkObj.x||0); const dz = (o.z||0) - (trunkObj.z||0);
+							if(Math.hypot(dx,dz) < 120){ objects.splice(i,1); }
+						}
+					}
 					showPickup('Picked up Wood');
 					saveState();
 					refresh();
