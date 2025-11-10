@@ -383,26 +383,15 @@
 
 			drawObjects(){
 				const ctx = this.ctx;
-				const projected = this.objects.map(o=>({o,p:this.projectPoint(o)})).filter(x=>x.p);
+				// Only draw objects that have textures; hide circular placeholders
+				const projected = this.objects.map(o=>({o,p:this.projectPoint(o)})).filter(x=>x.p && x.o.texture && x.o.texture.complete);
 				projected.sort((a,b)=>b.p.z - a.p.z);
 				for(const item of projected){
 					const o = item.o, p = item.p; const size = 56 * p.scale;
 					ctx.save(); ctx.translate(p.x,p.y);
-					// draw either texture (if available) or circle placeholder
-					if(o.texture && o.texture.complete){
-						const img = o.texture;
-						const aspect = img.width / img.height || 1;
-						const h = Math.max(8, size);
-						const w = Math.max(8, h * aspect);
-						ctx.drawImage(img, -w/2, -h/2, w, h);
-					} else {
-						const shade = Math.max(0.2, Math.min(1, 1 - (p.z/2000)));
-						ctx.fillStyle = shadeColor(o.color||'#06b6d4', shade);
-						ctx.beginPath(); ctx.arc(0,0,Math.max(6,size/2),0,Math.PI*2); ctx.fill();
-						ctx.fillStyle = '#042028'; ctx.font = `${Math.max(10, 12 * p.scale)}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
-						ctx.fillText(o.name[0]||'?',0,0);
-					}
-					if(selectedId === o.id){ ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.stroke(); }
+					const img = o.texture; const aspect = img.width / img.height || 1; const h = Math.max(8,size); const w = Math.max(8,h*aspect);
+					ctx.drawImage(img, -w/2, -h/2, w, h);
+					if(selectedId === o.id){ ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.strokeRect(-w/2,-h/2,w,h); }
 					ctx.restore();
 				}
 			}
@@ -435,8 +424,8 @@
 						// lid: rotate verts around hinge (back top edge)
 						if(obj._lidTemplate){
 							const lid = obj._lidTemplate; const dims = obj._chestDims;
-							// hinge along the back/top edge: use positive hd so lid opens upward (away from base)
-							const hingeY = dims.h; const hingeZ = dims.hd; // local hinge (front/back side)
+							// hinge along the back/top edge: use back side (-hd) so lid rotates correctly
+							const hingeY = dims.h; const hingeZ = -dims.hd; // local hinge (back edge)
 							const angle = obj.lidAngle || 0;
 							// precompute rotated verts
 							const rotated = [];
@@ -500,12 +489,47 @@
 			}
 
 			getObjectAtScreen(x,y){
-				const hits = [];
-				for(const o of this.objects){
-					const p = this.projectPoint(o); if(!p) continue; const size = 56 * p.scale;
-					if(x >= p.x - size/2 && x <= p.x + size/2 && y >= p.y - size/2 && y <= p.y + size/2) hits.push({o,p});
+				// robust hit-test using rendered triangles (tetrahedrons faces + mesh triangles)
+				let best = null; let bestDepth = Infinity;
+				// helper: point-in-triangle 2D (barycentric)
+				function pointInTri(px,py,ax,ay,bx,by,cx,cy){
+					const v0x = cx-ax, v0y = cy-ay; const v1x = bx-ax, v1y = by-ay; const v2x = px-ax, v2y = py-ay;
+					const dot00 = v0x*v0x + v0y*v0y; const dot01 = v0x*v1x + v0y*v1y; const dot02 = v0x*v2x + v0y*v2y;
+					const dot11 = v1x*v1x + v1y*v1y; const dot12 = v1x*v2x + v1y*v2y;
+					const invDenom = 1 / (dot00 * dot11 - dot01 * dot01 + 1e-12);
+					const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+					const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+					return (u >= -1e-6) && (v >= -1e-6) && (u + v <= 1+1e-6);
 				}
-				hits.sort((a,b)=>a.p.z - b.p.z); return hits.length?hits[0].o:null;
+
+				for(const o of this.objects){
+					// check mesh triangles first (obj._renderTris)
+					if(o._renderTris){
+						for(const tri of o._renderTris){
+							const pa = this.projectPoint(tri[0]); const pb = this.projectPoint(tri[1]); const pc = this.projectPoint(tri[2]);
+							if(!pa||!pb||!pc) continue;
+							if(pointInTri(x,y, pa.x,pa.y, pb.x,pb.y, pc.x,pc.y)){
+								const depth = (pa.z + pb.z + pc.z) / 3;
+								if(depth < bestDepth){ bestDepth = depth; best = o; }
+							}
+						}
+					}
+					// check tetrahedron faces
+					if(o.tetrahedrons){
+						for(const tet of o.tetrahedrons){
+							const faces = [[tet.a,tet.b,tet.c],[tet.a,tet.b,tet.d],[tet.a,tet.c,tet.d],[tet.b,tet.c,tet.d]];
+							for(const f of faces){
+								const pa = this.projectPoint(f[0]); const pb = this.projectPoint(f[1]); const pc = this.projectPoint(f[2]);
+								if(!pa||!pb||!pc) continue;
+								if(pointInTri(x,y, pa.x,pa.y, pb.x,pb.y, pc.x,pc.y)){
+									const depth = (pa.z + pb.z + pc.z) / 3;
+									if(depth < bestDepth){ bestDepth = depth; best = o; }
+								}
+							}
+						}
+					}
+				}
+				return best;
 			}
 
 			getObjectInCenter(){
@@ -688,9 +712,15 @@
 						if(obj.name && obj.name.toLowerCase() === 'chest'){
 							// toggle open target (positive angle to lift lid)
 							if(!obj.opened){
-								obj.opened = true; obj.lidTarget = Math.PI * 0.65;
+								obj.opened = true; obj.lidTarget = -Math.PI * 0.65;
 								// collect gold first time
-								if(!obj.collected){ obj.collected = true; inventory.push({id:'gold',name:'Gold',qty:1}); console.log('Collected gold!'); }
+								if(!obj.collected){
+									obj.collected = true;
+									const existing = inventory.find(it=>it.id === 'gold');
+									if(existing) existing.qty = (existing.qty||0) + 1;
+									else inventory.push({id:'gold',name:'Gold',qty:1});
+									console.log('Collected gold!');
+								}
 							} else {
 								obj.opened = false; obj.lidTarget = 0;
 							}
@@ -836,9 +866,9 @@
 				const val = decodeURIComponent(match.split('=')[1]);
 				const state = JSON.parse(val);
 				if(state.player){ player.x = state.player.x; player.y = state.player.y; player.z = state.player.z; }
-				if(state.objects){
-					for(const s of state.objects){ const o = objects.find(x=>x.id===s.id); if(o){ o.x=s.x; o.y=s.y; o.z=s.z; o.opened = !!s.opened; o.collected = !!s.collected; if(o.opened) o.lidTarget = Math.PI * 0.65; else o.lidTarget = 0; }}
-				}
+					if(state.objects){
+						for(const s of state.objects){ const o = objects.find(x=>x.id===s.id); if(o){ o.x=s.x; o.y=s.y; o.z=s.z; o.opened = !!s.opened; o.collected = !!s.collected; if(o.opened) o.lidTarget = -Math.PI * 0.65; else o.lidTarget = 0; }}
+					}
 				if(state.inventory) inventory = state.inventory;
 				console.log('Loaded state from cookies');
 			}catch(err){ console.warn('Load failed',err); }
