@@ -74,7 +74,10 @@
 		<div id="inventoryPanel" style="display:none; position:fixed;right:18px;top:80px;background:rgba(2,6,23,0.9);color:#e6eef6;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);z-index:45;min-width:220px">
 			<h4 style="margin:0 0 8px 0">Inventory</h4>
 			<div id="inventoryList" style="max-height:300px;overflow:auto"></div>
-			<div style="margin-top:8px;text-align:right"><button id="closeInventoryBtn">Close</button></div>
+			<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+				<button id="putDownBtn">Put Down</button>
+				<button id="closeInventoryBtn">Close</button>
+			</div>
 		</div>
 
 		<footer>
@@ -137,17 +140,28 @@
 				color:'#8B5A2B',
 				description:'A treasure chest with loot.'
 			},
-			// a simple tree near the chest
+			// tree split into trunk and canopy so we can color and act on parts separately
 			{
 				id:5,
-				name:'Tree',
+				name:'TreeTrunk',
 				x:360,y:0,z:540,
 				triangles:[],
-				// trunk and canopy approximated by tetrahedrons
 				tetrahedrons:[
 					// trunk - thin tall tetra
-					{a:{x:354,y:0,z:536},b:{x:366,y:0,z:536},c:{x:366,y:40,z:544},d:{x:354,y:40,z:544}},
-					// canopy - three tetrahedrons forming a rough leafy mass
+					{a:{x:354,y:0,z:536},b:{x:366,y:0,z:536},c:{x:366,y:40,z:544},d:{x:354,y:40,z:544}}
+				],
+				actions:[{key:'q',name:'cut'}],
+				isworld:true,
+				iswall:true,
+				color:'#8B5A2B',
+				description:'Tree trunk. Press Q to cut.'
+			},
+			{
+				id:6,
+				name:'TreeCanopy',
+				x:360,y:40,z:540,
+				triangles:[],
+				tetrahedrons:[
 					{a:{x:340,y:40,z:520},b:{x:380,y:40,z:520},c:{x:360,y:80,z:540},d:{x:360,y:55,z:500}},
 					{a:{x:340,y:45,z:560},b:{x:380,y:45,z:560},c:{x:360,y:85,z:540},d:{x:360,y:60,z:580}}
 				],
@@ -155,7 +169,7 @@
 				isworld:true,
 				iswall:true,
 				color:'#16a34a',
-				description:'A tree with trunk and leafy canopy.'
+				description:'Tree canopy.'
 			}
 		];
 
@@ -261,6 +275,16 @@
 		const centerBtn = document.getElementById('centerBtn');
 		const selectedInfo = document.getElementById('selectedInfo');
 
+		// add Inventory button to header toolbar
+		(function(){
+			const tb = document.querySelector('.toolbar');
+			if(tb){
+				const b = document.createElement('button'); b.id='toolbarInventoryBtn'; b.textContent='Inventory';
+				b.addEventListener('click', ()=>{ inventoryOpen = true; document.getElementById('inventoryPanel').style.display=''; renderInventory(); });
+				tb.appendChild(b);
+			}
+		})();
+
 		let selectedId = null;
 
 		// (renderer will handle canvas resizing and drawing)
@@ -311,7 +335,8 @@
 
 				if(rlz <= 5) return null;
 				const scale = this.camera.focal / rlz;
-				return {x: cx + rx * scale, y: cy + ry * scale, scale: scale, z: rlz};
+				// flip Y so positive world Y is up on screen
+				return {x: cx + rx * scale, y: cy - ry * scale, scale: scale, z: rlz};
 			}
 
 			// draw a floor grid at y=0
@@ -347,11 +372,14 @@
 									const pb = this.projectPoint(face[1]);
 									const pc = this.projectPoint(face[2]);
 									if(!pa||!pb||!pc) continue;
-									ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.lineTo(pc.x,pc.y); ctx.closePath();
-									// fill face with slight transparency for volume perception
-									ctx.fillStyle = hexToRgba(obj.color||'#888', 0.08);
-									ctx.fill();
-									ctx.strokeStyle = (obj.color||'#888'); ctx.lineWidth = 1; ctx.stroke();
+								ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.lineTo(pc.x,pc.y); ctx.closePath();
+								// canopy should be more opaque to avoid holes; trunk can be darker
+								let alpha = 0.12;
+								if(obj.name && obj.name.toLowerCase().includes('canopy')) alpha = 0.6;
+								if(obj.name && obj.name.toLowerCase().includes('trunk')) alpha = 0.9;
+								ctx.fillStyle = hexToRgba(obj.color||'#888', alpha);
+								ctx.fill();
+								ctx.strokeStyle = shadeColor(obj.color||'#888', 0.9); ctx.lineWidth = 1; ctx.stroke();
 						}
 					}
 				}
@@ -686,6 +714,20 @@
 		 	selectObject(obj.id);
 		});
 
+		// pickup toast (temporary overlay when items picked up)
+		function showPickup(text){
+			let el = document.getElementById('pickupToast');
+			if(!el){
+				el = document.createElement('div'); el.id = 'pickupToast';
+				el.style.position = 'fixed'; el.style.left = '50%'; el.style.top = '12%'; el.style.transform = 'translateX(-50%)';
+				el.style.background = 'rgba(2,6,23,0.9)'; el.style.color = '#e6eef6'; el.style.padding = '8px 12px'; el.style.borderRadius = '8px';
+				el.style.border = '1px solid rgba(255,255,255,0.06)'; el.style.zIndex = 60; document.body.appendChild(el);
+			}
+			el.textContent = text; el.style.opacity = '1';
+			clearTimeout(el._timeout);
+			el._timeout = setTimeout(()=>{ el.style.transition='opacity 400ms'; el.style.opacity='0'; }, 2500);
+		}
+
 		// ---------- input and physics loop ----------
 		document.addEventListener('keydown',(e)=>{
 			if(e.repeat) return;
@@ -733,16 +775,14 @@
 					}
 				}
 			// other object-defined keys (zxc... etc)
-			const center = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
-			if(center && center.actions){
-				for(const a of center.actions){
-					if(a.key === k){
-						console.log('Action',a.name,'on',center.name);
-						// custom: mark lastAction
-						center.lastAction = a.name;
+				const center = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
+				if(center && center.actions){
+					for(const a of center.actions){
+						if(a.key === k){
+							performAction(center, a);
+						}
 					}
 				}
-			}
 		});
 
 		document.addEventListener('keyup',(e)=>{
@@ -830,6 +870,30 @@
 			return null;
 		}
 
+		// perform object actions (e.g., cut tree)
+		function performAction(obj, action){
+			if(!obj || !action) return;
+			const key = (action.key||'').toLowerCase();
+			const name = (action.name||'').toLowerCase();
+			if(name === 'cut' || key === 'x'){
+				// remove trunk and give wood
+				// find trunk object index
+				const idx = objects.findIndex(o=>o.id === obj.id);
+				if(idx >= 0){
+					// spawn a small wood pickup in inventory and remove object
+					const existing = inventory.find(it=>it.id === 'wood');
+					if(existing) existing.qty = (existing.qty||0) + 1;
+					else inventory.push({id:'wood',name:'Wood',qty:1});
+					objects.splice(idx,1);
+					showPickup('Picked up Wood');
+					saveState();
+					refresh();
+				}
+				return;
+			}
+			// other action hooks can go here
+		}
+
 		// pause menu helpers
 		function showPauseMenu(){
 			document.getElementById('pauseMenu').style.display = '';
@@ -842,9 +906,15 @@
 		function renderInventory(){
 			const el = document.getElementById('inventoryList'); el.innerHTML = '';
 			if(inventory.length === 0){ el.textContent = 'Empty'; return; }
-			inventory.forEach(it=>{
-				const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='6px 4px';
+			inventory.forEach((it, i)=>{
+				const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='6px 4px'; row.style.cursor='pointer';
+				row.dataset.idx = i;
 				row.innerHTML = `<div>${it.name}</div><div class="muted">x${it.qty||1}</div>`;
+				row.addEventListener('click', ()=>{
+					// highlight selection
+					const prev = document.querySelector('#inventoryList .selected'); if(prev) prev.classList.remove('selected');
+					row.classList.add('selected'); window._selectedInventoryIndex = i;
+				});
 				el.appendChild(row);
 			});
 		}
@@ -988,6 +1058,24 @@
 		document.getElementById('pauseInventoryBtn').addEventListener('click', ()=>{ inventoryOpen = true; document.getElementById('inventoryPanel').style.display = ''; renderInventory(); });
 		document.getElementById('saveBtn').addEventListener('click', ()=>{ saveState(); });
 		document.getElementById('closeInventoryBtn').addEventListener('click', ()=>{ inventoryOpen = false; document.getElementById('inventoryPanel').style.display = 'none'; });
+		document.getElementById('putDownBtn').addEventListener('click', ()=>{
+			// put down selected inventory item into world in front of player
+			if(!window._selectedInventoryIndex && window._selectedInventoryIndex !== 0) { showPickup('Select an item first'); return; }
+			const idx = window._selectedInventoryIndex;
+			if(!inventory[idx]){ showPickup('No item selected'); return; }
+			const it = inventory[idx];
+			// remove one from inventory
+			it.qty -= 1; if(it.qty <= 0) inventory.splice(idx,1);
+			// spawn a small dropped object in front of player
+			const id = Date.now();
+			const rot = player.rotY || 0; const fx = Math.sin(rot), fz = Math.cos(rot);
+			const ox = player.x + fx * 60; const oz = player.z + fz * 60; const oy = Math.max(0, player.y);
+			const color = it.id === 'gold' ? '#ffd700' : (it.id === 'wood' ? '#8B5A2B' : '#ccc');
+			const drop = { id, name: it.name, x:ox, y:oy, z:oz, triangles:[], tetrahedrons:[{a:{x:ox-6,y:oy,z:oz-6},b:{x:ox+6,y:oy,z:oz-6},c:{x:ox+6,y:oy+12,z:oz+6},d:{x:ox-6,y:oy+12,z:oz+6}}], actions:[], isworld:false, iswall:false, color };
+			objects.push(drop);
+			showPickup('Put down ' + it.name);
+			saveState(); renderInventory(); refresh();
+		});
 		addBtn.addEventListener('click', addRandomObject);
 		clearBtn.addEventListener('click', clearObjects);
 		centerBtn.addEventListener('click', centerSelected);
