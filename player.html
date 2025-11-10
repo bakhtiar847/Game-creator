@@ -152,8 +152,8 @@
 					{a:{x:340,y:45,z:560},b:{x:380,y:45,z:560},c:{x:360,y:85,z:540},d:{x:360,y:60,z:580}}
 				],
 				actions:[],
-				isworld:false,
-				iswall:false,
+				isworld:true,
+				iswall:true,
 				color:'#16a34a',
 				description:'A tree with trunk and leafy canopy.'
 			}
@@ -674,9 +674,11 @@
 				return;
 			}
 			keysDown.add(k);
-			// inventory toggle
+			// inventory toggle (quick key)
 			if(k === 'e'){
 				inventoryOpen = !inventoryOpen;
+				document.getElementById('inventoryPanel').style.display = inventoryOpen ? '' : 'none';
+				if(inventoryOpen) renderInventory();
 				console.log('Inventory',inventoryOpen);
 			}
 			// interact: if chest is centered, open/close lid on 'q'
@@ -798,6 +800,55 @@
 			return null;
 		}
 
+		// pause menu helpers
+		function showPauseMenu(){
+			document.getElementById('pauseMenu').style.display = '';
+		}
+		function hidePauseMenu(){
+			document.getElementById('pauseMenu').style.display = 'none';
+			document.getElementById('inventoryPanel').style.display = 'none';
+		}
+
+		function renderInventory(){
+			const el = document.getElementById('inventoryList'); el.innerHTML = '';
+			if(inventory.length === 0){ el.textContent = 'Empty'; return; }
+			inventory.forEach(it=>{
+				const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='6px 4px';
+				row.innerHTML = `<div>${it.name}</div><div class="muted">x${it.qty||1}</div>`;
+				el.appendChild(row);
+			});
+		}
+
+		// save/load state to cookies
+		function saveState(){
+			try{
+				const state = { objects: objects.map(o=>({id:o.id,x:o.x,y:o.y,z:o.z,opened:o.opened,collected:o.collected})),
+					player:{x:player.x,y:player.y,z:player.z}, inventory, timestamp: Date.now() };
+				document.cookie = 'game_state=' + encodeURIComponent(JSON.stringify(state)) + ';max-age='+(60*60*24*365)+';path=/';
+				console.log('Saved state to cookies');
+			}catch(err){ console.warn('Save failed',err); }
+		}
+
+		function loadState(){
+			try{
+				const match = document.cookie.split('; ').find(c=>c.startsWith('game_state='));
+				if(!match) return;
+				const val = decodeURIComponent(match.split('=')[1]);
+				const state = JSON.parse(val);
+				if(state.player){ player.x = state.player.x; player.y = state.player.y; player.z = state.player.z; }
+				if(state.objects){
+					for(const s of state.objects){ const o = objects.find(x=>x.id===s.id); if(o){ o.x=s.x; o.y=s.y; o.z=s.z; o.opened = !!s.opened; o.collected = !!s.collected; if(o.opened) o.lidTarget = Math.PI * 0.65; else o.lidTarget = 0; }}
+				}
+				if(state.inventory) inventory = state.inventory;
+				console.log('Loaded state from cookies');
+			}catch(err){ console.warn('Load failed',err); }
+		}
+
+		// autosave every minute
+		setInterval(()=>{ saveState(); }, 60 * 1000);
+		// load saved state on start (if present)
+		loadState();
+
 
 		function renderList(){
 			objectList.innerHTML = '';
@@ -902,6 +953,11 @@
 		toggleOverlayBtn.addEventListener('click', ()=>{
 			overlay.style.display = overlay.style.display === 'none' ? '' : 'none';
 		});
+		// pause menu buttons wiring
+		document.getElementById('resumeBtn').addEventListener('click', ()=>{ paused = false; hidePauseMenu(); lastFrame = performance.now(); });
+		document.getElementById('pauseInventoryBtn').addEventListener('click', ()=>{ inventoryOpen = true; document.getElementById('inventoryPanel').style.display = ''; renderInventory(); });
+		document.getElementById('saveBtn').addEventListener('click', ()=>{ saveState(); });
+		document.getElementById('closeInventoryBtn').addEventListener('click', ()=>{ inventoryOpen = false; document.getElementById('inventoryPanel').style.display = 'none'; });
 		addBtn.addEventListener('click', addRandomObject);
 		clearBtn.addEventListener('click', clearObjects);
 		centerBtn.addEventListener('click', centerSelected);
