@@ -220,12 +220,15 @@
 					for(const tet of obj.tetrahedrons){
 						const faces = [[tet.a,tet.b,tet.c],[tet.a,tet.b,tet.d],[tet.a,tet.c,tet.d],[tet.b,tet.c,tet.d]];
 						for(const face of faces){
-							const pa = this.projectPoint(face[0]);
-							const pb = this.projectPoint(face[1]);
-							const pc = this.projectPoint(face[2]);
-							if(!pa||!pb||!pc) continue;
-							ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.lineTo(pc.x,pc.y); ctx.closePath();
-							ctx.strokeStyle = (obj.color||'#888'); ctx.lineWidth = 1; ctx.stroke();
+									const pa = this.projectPoint(face[0]);
+									const pb = this.projectPoint(face[1]);
+									const pc = this.projectPoint(face[2]);
+									if(!pa||!pb||!pc) continue;
+									ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.lineTo(pc.x,pc.y); ctx.closePath();
+									// fill face with slight transparency for volume perception
+									ctx.fillStyle = hexToRgba(obj.color||'#888', 0.08);
+									ctx.fill();
+									ctx.strokeStyle = (obj.color||'#888'); ctx.lineWidth = 1; ctx.stroke();
 						}
 					}
 				}
@@ -250,8 +253,16 @@
 
 			render(){
 				this.resize(); this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
-				// update camera follow
-				this.camera.x = this.player.x; this.camera.y = this.player.y + 40; this.camera.z = this.player.z - 160;
+				// update camera: place inside top-center-front of player (eye position)
+				const eyeHeight = 40; // above player origin
+				const forwardOffset = 30; // in front of player
+				const rot = this.player.rotY || 0;
+				this.camera.x = this.player.x + Math.sin(rot) * forwardOffset;
+				this.camera.z = this.player.z + Math.cos(rot) * forwardOffset;
+				this.camera.y = this.player.y + eyeHeight;
+				// camera orientation follows player view
+				this.camera.rotY = this.player.rotY || 0;
+				this.camera.rotX = this.player.pitch || 0;
 				this.drawFloor(); this.drawTetrahedrons(); this.drawObjects();
 			}
 
@@ -289,9 +300,15 @@
 			const v1 = signedTetraVolume(tet.a,pt,tet.c,tet.d);
 			const v2 = signedTetraVolume(tet.a,tet.b,pt,tet.d);
 			const v3 = signedTetraVolume(tet.a,tet.b,tet.c,pt);
-			// allow small epsilon
-			const eps = 1e-6;
-			return Math.abs(v - (v0+v1+v2+v3)) < 1e-3 && ((v0>=-eps && v1>=-eps && v2>=-eps && v3>=-eps) || (v0<=eps && v1<=eps && v2<=eps && v3<=eps));
+			// allow relative epsilon based on tetra volume magnitude
+			const tol = 1e-4 * Math.max(1, Math.abs(v));
+			const sumDiff = Math.abs(v - (v0+v1+v2+v3));
+			if(sumDiff > tol) return false;
+			// require sub-volumes have same sign (or zero)
+			const signs = [v0, v1, v2, v3].map(x=> Math.sign(x));
+			const allNonNeg = signs.every(s=> s >= 0);
+			const allNonPos = signs.every(s=> s <= 0);
+			return allNonNeg || allNonPos;
 		}
 
 		function isBlockedByWorld(pos){
@@ -329,6 +346,15 @@
 			let b = num & 0xff;
 			r = Math.round(r * factor); g = Math.round(g * factor); b = Math.round(b * factor);
 			return `rgb(${r},${g},${b})`;
+		}
+
+		function hexToRgba(hex, alpha){
+			const c = hex.replace('#','');
+			const num = parseInt(c,16);
+			let r = (num >> 16) & 0xff;
+			let g = (num >> 8) & 0xff;
+			let b = num & 0xff;
+			return `rgba(${r},${g},${b},${alpha})`;
 		}
 
 		// handle click selection using renderer
