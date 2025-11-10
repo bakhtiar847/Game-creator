@@ -66,12 +66,64 @@
 	</div>
 
 	<script>
-		// Simple objects array to render. Each object has id,name,x,y,color,description
+		// Objects now have richer structure:
+		// { id, name, x,y,z (origin), triangles: [{p1:{x,y,z}, p2, p3}], tetrahedrons: [{a,b,c,d}], actions: [{key,name}], flags: isplayer,isworld,iswall }
 		let objects = [
-			{id:1,name:'Player',x:150,y:120,z:40,color:'#06b6d4',description:'Main player character'},
-			{id:2,name:'Tree',x:420,y:200,z:0,color:'#34d399',description:'A tall oak tree.'},
-			{id:3,name:'Chest',x:300,y:380,z:-80,color:'#f59e0b',description:'A treasure chest with loot.'}
+			{
+				id:1,
+				name:'Player',
+				x:300,y:100,z:200,
+				triangles:[],
+				tetrahedrons:[],
+				actions:[],
+				isplayer:true
+			},
+			{
+				id:2,
+				name:'Wall',
+				x:500,y:0,z:400,
+				triangles:[],
+				// simple tetrahedron (four points) in world coords
+				tetrahedrons:[
+					{a:{x:480,y:0,z:380},b:{x:520,y:0,z:380},c:{x:520,y:100,z:420},d:{x:480,y:100,z:420}}
+				],
+				actions:[{key:'q',name:'inspect'}],
+				isworld:true,
+				iswall:true,
+				color:'#94a3b8',
+				description:'A simple wall tetrahedron'
+			},
+			{
+				id:3,
+				name:'Chest',
+				x:300,y:0,z:500,
+				triangles:[],
+				tetrahedrons:[{a:{x:280,y:0,z:480},b:{x:320,y:0,z:480},c:{x:320,y:60,z:520},d:{x:280,y:60,z:520}}],
+				actions:[{key:'q',name:'open'}, {key:'z',name:'special'}],
+				isworld:false,
+				iswall:false,
+				color:'#f59e0b',
+				description:'A treasure chest with loot.'
+			}
 		];
+
+		// find player reference and set up player physics state
+		let player = objects.find(o=>o.isplayer);
+		if(!player){
+			player = {id:0,name:'Player',x:300,y:100,z:200,triangles:[],tetrahedrons:[],actions:[],isplayer:true};
+			objects.unshift(player);
+		}
+		player.vel = {x:0,y:0,z:0};
+		player.speed = 120; // units per second
+		player.jumpImpulse = 320;
+		player.onGround = false;
+
+		// input state
+		const keysDown = new Set();
+
+		// simple inventory
+		let inventoryOpen = false;
+
 
 		const stage = document.getElementById('stage');
 		const canvas = document.getElementById('canvas');
@@ -114,9 +166,9 @@
 			const cx = canvas.width/2 / (window.devicePixelRatio||1);
 			const cy = canvas.height/2 / (window.devicePixelRatio||1);
 
-			// translate relative to camera
-			let x = obj.x - cx;
-			let y = obj.y - cy;
+			// translate relative to camera position
+			let x = obj.x - camera.x;
+			let y = obj.y - camera.y;
 			let z = obj.z - camera.z;
 
 			// rotate Y (around vertical axis)
@@ -141,11 +193,78 @@
 			};
 		}
 
+		// ---------- collision helpers ----------
+		// signed volume of tetrahedron (a,b,c,d)
+		function signedTetraVolume(a,b,c,d){
+			const ax = a.x-d.x, ay = a.y-d.y, az = a.z-d.z;
+			const bx = b.x-d.x, by = b.y-d.y, bz = b.z-d.z;
+			const cx = c.x-d.x, cy = c.y-d.y, cz = c.z-d.z;
+			return (ax * (by*cz - bz*cy) - ay * (bx*cz - bz*cx) + az * (bx*cy - by*cx)) / 6;
+		}
+
+		function pointInTetra(pt, tet){
+			// using barycentric volumes: point is inside if all sub-volumes have same sign and sum equals vol
+			const v = signedTetraVolume(tet.a,tet.b,tet.c,tet.d);
+			const v0 = signedTetraVolume(pt,tet.b,tet.c,tet.d);
+			const v1 = signedTetraVolume(tet.a,pt,tet.c,tet.d);
+			const v2 = signedTetraVolume(tet.a,tet.b,pt,tet.d);
+			const v3 = signedTetraVolume(tet.a,tet.b,tet.c,pt);
+			// allow small epsilon
+			const eps = 1e-6;
+			return Math.abs(v - (v0+v1+v2+v3)) < 1e-3 && ((v0>=-eps && v1>=-eps && v2>=-eps && v3>=-eps) || (v0<=eps && v1<=eps && v2<=eps && v3<=eps));
+		}
+
+		function isBlockedByWorld(pos){
+			// pos: {x,y,z}
+			for(const obj of objects){
+				if(!(obj.isworld || obj.iswall)) continue;
+				if(!obj.tetrahedrons) continue;
+				for(const tet of obj.tetrahedrons){
+					if(pointInTetra(pos,tet)) return true;
+				}
+			}
+			return false;
+		}
+
 		function renderStage(){
 			resizeCanvas();
 			ctx.clearRect(0,0,canvas.width,canvas.height);
 
-			// project all objects and sort by depth (draw far first)
+			// camera follows player (behind)
+			camera.x = player.x;
+			camera.y = player.y + 40; // eye height above player origin
+			camera.z = player.z - 160; // behind player
+
+			// project and draw world tetrahedrons (wireframe) first
+			for(const obj of objects){
+				if(obj.tetrahedrons && obj.tetrahedrons.length){
+					for(const tet of obj.tetrahedrons){
+						// draw 4 triangular faces
+						const faces = [
+							[tet.a,tet.b,tet.c],
+							[tet.a,tet.b,tet.d],
+							[tet.a,tet.c,tet.d],
+							[tet.b,tet.c,tet.d]
+						];
+						for(const face of faces){
+							const pa = project(face[0]);
+							const pb = project(face[1]);
+							const pc = project(face[2]);
+							if(!pa||!pb||!pc) continue;
+							ctx.beginPath();
+							ctx.moveTo(pa.x,pa.y);
+							ctx.lineTo(pb.x,pb.y);
+							ctx.lineTo(pc.x,pc.y);
+							ctx.closePath();
+							ctx.strokeStyle = (obj.color||'#ffffff');
+							ctx.lineWidth = 1;
+							ctx.stroke();
+						}
+					}
+				}
+			}
+
+			// project all object centers for picking/rendering
 			const projected = objects.map(o=>({o,p:project(o)})).filter(x=>x.p);
 			projected.sort((a,b)=>b.p.z - a.p.z);
 
@@ -154,18 +273,16 @@
 				const size = 56 * p.scale; // base size scaled by depth
 				ctx.save();
 				ctx.translate(p.x, p.y);
-				// shadow / simple shading based on depth
+				// simple shaded quad representing object center
 				const shade = Math.max(0.2, Math.min(1, 1 - (p.z/2000)));
-				ctx.fillStyle = shadeColor(o.color, shade);
+				ctx.fillStyle = shadeColor(o.color||'#06b6d4', shade);
 				roundedRect(ctx, -size/2, -size/2, size, size, Math.max(4, size*0.12));
 				ctx.fill();
-				// label
 				ctx.fillStyle = '#042028';
 				ctx.font = `${Math.max(10, 12 * p.scale)}px sans-serif`;
 				ctx.textAlign = 'center';
 				ctx.textBaseline = 'middle';
 				ctx.fillText(o.name[0] || '?', 0, 0);
-				// outline for selected
 				if(selectedId === o.id){
 					ctx.lineWidth = 2;
 					ctx.strokeStyle = 'rgba(255,255,255,0.9)';
@@ -224,6 +341,98 @@
 			hits.sort((a,b)=>a.p.z - b.p.z); // nearest first (smaller z)
 			selectObject(hits[0].o.id);
 		});
+
+		// ---------- input and physics loop ----------
+		document.addEventListener('keydown',(e)=>{
+			if(e.repeat) return;
+			const k = e.key.toLowerCase();
+			keysDown.add(k);
+			// inventory toggle
+			if(k === 'e'){
+				inventoryOpen = !inventoryOpen;
+				console.log('Inventory',inventoryOpen);
+			}
+			// interact
+			if(k === 'q'){
+				const obj = getObjectInCenter();
+				if(obj){
+					// default interact: add a property interactions++
+					obj.interactions = (obj.interactions||0) + 1;
+					console.log('Interacted with',obj.name,obj.interactions);
+				}
+			}
+			// other object-defined keys (zxc... etc)
+			const center = getObjectInCenter();
+			if(center && center.actions){
+				for(const a of center.actions){
+					if(a.key === k){
+						console.log('Action',a.name,'on',center.name);
+						// custom: mark lastAction
+						center.lastAction = a.name;
+					}
+				}
+			}
+		});
+
+		document.addEventListener('keyup',(e)=>{
+			keysDown.delete(e.key.toLowerCase());
+		});
+
+		let lastFrame = performance.now();
+
+		function physicsStep(now){
+			const dt = Math.max(0, Math.min(0.05, (now - lastFrame)/1000));
+			lastFrame = now;
+
+			// controls: arrows to look (adjust player rotation), WASD to move relative to player rotation
+			if(keysDown.has('arrowleft')){ player.rotY = (player.rotY || 0) - 2.5 * dt; }
+			if(keysDown.has('arrowright')){ player.rotY = (player.rotY || 0) + 2.5 * dt; }
+			if(keysDown.has('arrowup')){ player.pitch = Math.max(-1.2,(player.pitch||0) - 2.5 * dt); }
+			if(keysDown.has('arrowdown')){ player.pitch = Math.min(1.2,(player.pitch||0) + 2.5 * dt); }
+
+			// movement vector in local space
+			let mvx=0, mvz=0;
+			if(keysDown.has('w')) mvz -= 1;
+			if(keysDown.has('s')) mvz += 1;
+			if(keysDown.has('a')) mvx -= 1;
+			if(keysDown.has('d')) mvx += 1;
+			const len = Math.hypot(mvx,mvz);
+			if(len>0){ mvx/=len; mvz/=len; }
+
+			// rotate movement by player.rotY
+			const rot = player.rotY || 0;
+			const sinR = Math.sin(rot), cosR = Math.cos(rot);
+			const worldDX = mvx * cosR - mvz * sinR;
+			const worldDZ = mvx * sinR + mvz * cosR;
+
+			// desired new position (horizontal)
+			const speed = player.speed;
+			const desired = {x: player.x + worldDX * speed * dt, y: player.y, z: player.z + worldDZ * speed * dt};
+
+			// check horizontal collision by testing player's origin point at desired pos against world/wall tetrahedrons
+			if(!isBlockedByWorld({x:desired.x,y:desired.y,z:desired.z})){
+				player.x = desired.x; player.z = desired.z;
+			}
+
+			// gravity
+			const GRAV = 900; // units/s^2
+			player.vel.y += GRAV * dt * 1; // downward positive
+			player.y += player.vel.y * dt;
+			// ground at y=0
+			if(player.y >= 0){ player.y = 0; player.vel.y = 0; player.onGround = true; }
+			else{ player.onGround = false; }
+
+			// jump (space)
+			if(keysDown.has(' ' ) || keysDown.has('space') ){
+				if(player.onGround){ player.vel.y = -player.jumpImpulse; player.onGround = false; }
+			}
+
+			// update camera to follow in renderStage
+			renderStage();
+			requestAnimationFrame(physicsStep);
+		}
+
+		requestAnimationFrame(physicsStep);
 
 
 		function renderList(){
