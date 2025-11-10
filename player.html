@@ -6,15 +6,17 @@
 	<title>Player — Objects & Overlay</title>
 	<style>
 		:root{--bg:#0f1721;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8}
-		html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:#e6eef6;background:linear-gradient(180deg,#071022 0%,#071a2a 100%)}
-		.container{display:flex;flex-direction:column;height:100vh}
+	html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:#e6eef6;background:linear-gradient(180deg,#071022 0%,#071a2a 100%);overflow:hidden}
+	.container{display:flex;flex-direction:column;height:100vh;overflow:hidden}
 		header{padding:12px 16px;display:flex;align-items:center;gap:12px}
 		h1{font-size:18px;margin:0;color:var(--accent)}
 		.toolbar{margin-left:auto;display:flex;gap:8px}
 		button{background:var(--card);border:1px solid rgba(255,255,255,0.04);color:#dff7ff;padding:8px 10px;border-radius:8px;cursor:pointer}
-		main{flex:1;display:flex;gap:12px;padding:12px}
+	main{flex:1;display:flex;gap:12px;padding:12px;min-height:0;box-sizing:border-box}
 		/* game area */
-		.stage{flex:1;background:rgba(255,255,255,0.02);border-radius:10px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.03)}
+	.stage{flex:1;background:rgba(255,255,255,0.02);border-radius:10px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.03)}
+	/* canvas should fill the stage without causing scrollbars */
+	#canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
 		.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.01) 1px, transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.01) 1px, transparent 1px);background-size:40px 40px,40px 40px}
 		.obj{position:absolute;width:56px;height:56px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#041826;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(2,6,23,0.6);transform:translate(-50%,-50%)}
 		/* overlay */
@@ -138,15 +140,7 @@
 
 		let selectedId = null;
 
-		// ---------- Canvas 3D renderer (software, from-scratch) ----------
-		function resizeCanvas(){
-			const dpr = window.devicePixelRatio || 1;
-			canvas.width = Math.max(300, stage.clientWidth) * dpr;
-			canvas.height = Math.max(150, stage.clientHeight) * dpr;
-			canvas.style.width = stage.clientWidth + 'px';
-			canvas.style.height = stage.clientHeight + 'px';
-			ctx.setTransform(dpr,0,0,dpr,0,0);
-		}
+		// (renderer will handle canvas resizing and drawing)
 
 		const Camera = function(){
 			this.x = 0; this.y = 0; this.z = -700; // camera placed behind origin
@@ -161,37 +155,123 @@
 
 		const camera = new Camera();
 
-		function project(obj){
-			// world coords (x,y,z) -> camera coords -> rotate -> perspective -> screen
-			const cx = canvas.width/2 / (window.devicePixelRatio||1);
-			const cy = canvas.height/2 / (window.devicePixelRatio||1);
+		// ---------- Renderer: encapsulates canvas-based 3D rendering ----------
+		class Renderer {
+			constructor(canvas, ctx, camera, objects, player){
+				this.canvas = canvas; this.ctx = ctx; this.camera = camera; this.objects = objects; this.player = player;
+				this.dpr = window.devicePixelRatio || 1;
+			}
 
-			// translate relative to camera position
-			let x = obj.x - camera.x;
-			let y = obj.y - camera.y;
-			let z = obj.z - camera.z;
+			resize(){
+				this.dpr = window.devicePixelRatio || 1;
+				this.canvas.width = Math.max(300, stage.clientWidth) * this.dpr;
+				this.canvas.height = Math.max(150, stage.clientHeight) * this.dpr;
+				this.canvas.style.width = stage.clientWidth + 'px';
+				this.canvas.style.height = stage.clientHeight + 'px';
+				this.ctx.setTransform(this.dpr,0,0,this.dpr,0,0);
+			}
 
-			// rotate Y (around vertical axis)
-			const cosY = Math.cos(camera.rotY), sinY = Math.sin(camera.rotY);
-			let rx = x * cosY - z * sinY;
-			let rz = x * sinY + z * cosY;
+			projectPoint(pt){
+				const cx = this.canvas.width/2 / (window.devicePixelRatio||1);
+				const cy = this.canvas.height/2 / (window.devicePixelRatio||1);
+				let x = pt.x - this.camera.x;
+				let y = pt.y - this.camera.y;
+				let z = pt.z - this.camera.z;
 
-			// rotate X
-			const cosX = Math.cos(camera.rotX), sinX = Math.sin(camera.rotX);
-			let ry = y * cosX - rz * sinX;
-			rlz = y * sinX + rz * cosX;
+				const cosY = Math.cos(this.camera.rotY), sinY = Math.sin(this.camera.rotY);
+				let rx = x * cosY - z * sinY;
+				let rz = x * sinY + z * cosY;
 
-			// if behind camera, mark as culled
-			if(rlz <= 5) return null;
+				const cosX = Math.cos(this.camera.rotX), sinX = Math.sin(this.camera.rotX);
+				let ry = y * cosX - rz * sinX;
+				let rlz = y * sinX + rz * cosX;
 
-			const scale = camera.focal / rlz;
-			return {
-				x: cx + rx * scale,
-				y: cy + ry * scale,
-				scale: scale,
-				z: rlz
-			};
+				if(rlz <= 5) return null;
+				const scale = this.camera.focal / rlz;
+				return {x: cx + rx * scale, y: cy + ry * scale, scale: scale, z: rlz};
+			}
+
+			// draw a floor grid at y=0
+			drawFloor(){
+				const ctx = this.ctx;
+				ctx.save();
+				ctx.lineWidth = 1;
+				ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+				// grid spacing and extents
+				const spacing = 100;
+				const extent = 2000;
+				for(let z = -extent; z<=extent; z+=spacing){
+					const a = this.projectPoint({x:-extent,y:0,z:z});
+					const b = this.projectPoint({x:extent,y:0,z:z});
+					if(a && b){ ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+				}
+				for(let x = -extent; x<=extent; x+=spacing){
+					const a = this.projectPoint({x:x,y:0,z:-extent});
+					const b = this.projectPoint({x:x,y:0,z:extent});
+					if(a && b){ ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+				}
+				ctx.restore();
+			}
+
+			drawTetrahedrons(){
+				const ctx = this.ctx;
+				for(const obj of this.objects){
+					if(!obj.tetrahedrons) continue;
+					for(const tet of obj.tetrahedrons){
+						const faces = [[tet.a,tet.b,tet.c],[tet.a,tet.b,tet.d],[tet.a,tet.c,tet.d],[tet.b,tet.c,tet.d]];
+						for(const face of faces){
+							const pa = this.projectPoint(face[0]);
+							const pb = this.projectPoint(face[1]);
+							const pc = this.projectPoint(face[2]);
+							if(!pa||!pb||!pc) continue;
+							ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.lineTo(pc.x,pc.y); ctx.closePath();
+							ctx.strokeStyle = (obj.color||'#888'); ctx.lineWidth = 1; ctx.stroke();
+						}
+					}
+				}
+			}
+
+			drawObjects(){
+				const ctx = this.ctx;
+				const projected = this.objects.map(o=>({o,p:this.projectPoint(o)})).filter(x=>x.p);
+				projected.sort((a,b)=>b.p.z - a.p.z);
+				for(const item of projected){
+					const o = item.o, p = item.p; const size = 56 * p.scale;
+					ctx.save(); ctx.translate(p.x,p.y);
+					const shade = Math.max(0.2, Math.min(1, 1 - (p.z/2000)));
+					ctx.fillStyle = shadeColor(o.color||'#06b6d4', shade);
+					roundedRect(ctx, -size/2, -size/2, size, size, Math.max(4, size*0.12)); ctx.fill();
+					ctx.fillStyle = '#042028'; ctx.font = `${Math.max(10, 12 * p.scale)}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+					ctx.fillText(o.name[0]||'?',0,0);
+					if(selectedId === o.id){ ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.stroke(); }
+					ctx.restore();
+				}
+			}
+
+			render(){
+				this.resize(); this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+				// update camera follow
+				this.camera.x = this.player.x; this.camera.y = this.player.y + 40; this.camera.z = this.player.z - 160;
+				this.drawFloor(); this.drawTetrahedrons(); this.drawObjects();
+			}
+
+			getObjectAtScreen(x,y){
+				const hits = [];
+				for(const o of this.objects){
+					const p = this.projectPoint(o); if(!p) continue; const size = 56 * p.scale;
+					if(x >= p.x - size/2 && x <= p.x + size/2 && y >= p.y - size/2 && y <= p.y + size/2) hits.push({o,p});
+				}
+				hits.sort((a,b)=>a.p.z - b.p.z); return hits.length?hits[0].o:null;
+			}
+
+			getObjectInCenter(){
+				const rect = this.canvas.getBoundingClientRect(); const cx = rect.width/2; const cy = rect.height/2;
+				return this.getObjectAtScreen(cx,cy);
+			}
 		}
+
+		const renderer = new Renderer(canvas, ctx, camera, objects, player);
+		// project function is provided by renderer
 
 		// ---------- collision helpers ----------
 		// signed volume of tetrahedron (a,b,c,d)
@@ -226,71 +306,7 @@
 			return false;
 		}
 
-		function renderStage(){
-			resizeCanvas();
-			ctx.clearRect(0,0,canvas.width,canvas.height);
-
-			// camera follows player (behind)
-			camera.x = player.x;
-			camera.y = player.y + 40; // eye height above player origin
-			camera.z = player.z - 160; // behind player
-
-			// project and draw world tetrahedrons (wireframe) first
-			for(const obj of objects){
-				if(obj.tetrahedrons && obj.tetrahedrons.length){
-					for(const tet of obj.tetrahedrons){
-						// draw 4 triangular faces
-						const faces = [
-							[tet.a,tet.b,tet.c],
-							[tet.a,tet.b,tet.d],
-							[tet.a,tet.c,tet.d],
-							[tet.b,tet.c,tet.d]
-						];
-						for(const face of faces){
-							const pa = project(face[0]);
-							const pb = project(face[1]);
-							const pc = project(face[2]);
-							if(!pa||!pb||!pc) continue;
-							ctx.beginPath();
-							ctx.moveTo(pa.x,pa.y);
-							ctx.lineTo(pb.x,pb.y);
-							ctx.lineTo(pc.x,pc.y);
-							ctx.closePath();
-							ctx.strokeStyle = (obj.color||'#ffffff');
-							ctx.lineWidth = 1;
-							ctx.stroke();
-						}
-					}
-				}
-			}
-
-			// project all object centers for picking/rendering
-			const projected = objects.map(o=>({o,p:project(o)})).filter(x=>x.p);
-			projected.sort((a,b)=>b.p.z - a.p.z);
-
-			for(const item of projected){
-				const o = item.o, p = item.p;
-				const size = 56 * p.scale; // base size scaled by depth
-				ctx.save();
-				ctx.translate(p.x, p.y);
-				// simple shaded quad representing object center
-				const shade = Math.max(0.2, Math.min(1, 1 - (p.z/2000)));
-				ctx.fillStyle = shadeColor(o.color||'#06b6d4', shade);
-				roundedRect(ctx, -size/2, -size/2, size, size, Math.max(4, size*0.12));
-				ctx.fill();
-				ctx.fillStyle = '#042028';
-				ctx.font = `${Math.max(10, 12 * p.scale)}px sans-serif`;
-				ctx.textAlign = 'center';
-				ctx.textBaseline = 'middle';
-				ctx.fillText(o.name[0] || '?', 0, 0);
-				if(selectedId === o.id){
-					ctx.lineWidth = 2;
-					ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-					ctx.stroke();
-				}
-				ctx.restore();
-			}
-		}
+		// renderStage implementation replaced by renderer.render()
 
 		// helper: rounded rectangle path
 		function roundedRect(ctx,x,y,w,h,r){
@@ -315,31 +331,16 @@
 			return `rgb(${r},${g},${b})`;
 		}
 
-		// handle click selection by projecting objects and checking hitboxes
+		// handle click selection using renderer
 		canvas.addEventListener('click', (ev)=>{
 			const rect = canvas.getBoundingClientRect();
-			const x = (ev.clientX - rect.left);
-			const y = (ev.clientY - rect.top);
-			// pick nearest object whose projected bbox contains the point
-			const hits = [];
-			for(const o of objects){
-				const p = project(o);
-				if(!p) continue;
-				const size = 56 * p.scale;
-				if(x >= p.x - size/2 && x <= p.x + size/2 && y >= p.y - size/2 && y <= p.y + size/2){
-					hits.push({o,p});
-				}
-			}
-			if(hits.length === 0){
-				// deselect
-				selectedId = null;
-				selectedInfo.textContent = 'No selection';
-				const ex = document.getElementById('zControl'); if(ex) ex.remove();
-				refresh();
-				return;
-			}
-			hits.sort((a,b)=>a.p.z - b.p.z); // nearest first (smaller z)
-			selectObject(hits[0].o.id);
+		 	const x = (ev.clientX - rect.left);
+		 	const y = (ev.clientY - rect.top);
+		 	const obj = renderer.getObjectAtScreen(x,y);
+		 	if(!obj){
+		 		selectedId = null; selectedInfo.textContent = 'No selection'; const ex = document.getElementById('zControl'); if(ex) ex.remove(); renderer.render(); return;
+		 	}
+		 	selectObject(obj.id);
 		});
 
 		// ---------- input and physics loop ----------
@@ -362,7 +363,7 @@
 				}
 			}
 			// other object-defined keys (zxc... etc)
-			const center = getObjectInCenter();
+			const center = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
 			if(center && center.actions){
 				for(const a of center.actions){
 					if(a.key === k){
@@ -392,8 +393,8 @@
 
 			// movement vector in local space
 			let mvx=0, mvz=0;
-			if(keysDown.has('w')) mvz -= 1;
-			if(keysDown.has('s')) mvz += 1;
+			if(keysDown.has('w')) mvz += 1;
+			if(keysDown.has('s')) mvz -= 1;
 			if(keysDown.has('a')) mvx -= 1;
 			if(keysDown.has('d')) mvx += 1;
 			const len = Math.hypot(mvx,mvz);
@@ -427,12 +428,18 @@
 				if(player.onGround){ player.vel.y = -player.jumpImpulse; player.onGround = false; }
 			}
 
-			// update camera to follow in renderStage
-			renderStage();
+			// update camera and render via renderer
+			renderer.render();
 			requestAnimationFrame(physicsStep);
 		}
 
 		requestAnimationFrame(physicsStep);
+
+		// helper to get object in center of view via renderer
+		function getObjectInCenter(){
+			if(typeof renderer !== 'undefined') return renderer.getObjectInCenter();
+			return null;
+		}
 
 
 		function renderList(){
@@ -466,10 +473,7 @@
 			selectedInfo.textContent = `${obj.name} — ${obj.description}`;
 			// add z control when selected
 			renderSelectedZControl(obj);
-			// highlight selected element in stage
-			scene.querySelectorAll('.obj').forEach(el=>el.style.outline='');
-			const el = scene.querySelector(`.obj[data-id='${id}']`);
-			if(el) el.style.outline = `3px solid rgba(255,255,255,0.12)`;
+			// visual highlight handled by renderer using selectedId
 			// ensure overlay visible
 			overlay.style.display = '';
 		}
@@ -499,11 +503,12 @@
 		// helpers
 		function addRandomObject(){
 			const id = Date.now();
-			const x = Math.random()*(stage.clientWidth-80)+40;
-			const y = Math.random()*(stage.clientHeight-80)+40;
+			const x = player.x + (Math.random()-0.5)*400;
+			const y = 0; // place on floor
+			const z = player.z + (Math.random()*800 + 100);
 			const palette = ['#ef4444','#06b6d4','#f97316','#34d399','#a78bfa','#f59e0b'];
 			const color = palette[Math.floor(Math.random()*palette.length)];
-			const obj = {id,name:`Obj${String(id).slice(-4)}`.replace('id','Obj'),x,y,color,description:'A randomly created object'};
+			const obj = {id,name:`Obj${String(id).slice(-4)}`.replace('id','Obj'),x,y,z,triangles:[],tetrahedrons:[],actions:[],isworld:false,iswall:false,color,description:'A randomly created object'};
 			// ensure name exists properly
 			obj.name = 'Obj' + (objects.length+1);
 			objects.push(obj);
@@ -512,7 +517,8 @@
 		}
 
 		function clearObjects(){
-			objects = [];
+			// keep player (first object) but clear others
+			objects = objects.filter(o=>o.isplayer);
 			selectedId = null;
 			selectedInfo.textContent = 'No selection';
 			refresh();
@@ -522,14 +528,16 @@
 			if(!selectedId) return;
 			const obj = objects.find(o=>o.id===selectedId);
 			if(!obj) return;
-			obj.x = stage.clientWidth/2;
-			obj.y = stage.clientHeight/2;
+			// move selected object near player (center view)
+			obj.x = player.x;
+			obj.z = player.z + 200;
+			obj.y = 0;
 			refresh();
 			selectObject(obj.id);
 		}
 
 		function refresh(){
-			renderStage();
+			renderer.render();
 			renderList();
 		}
 
@@ -545,7 +553,8 @@
 		stage.addEventListener('click', ()=>{
 			selectedId = null;
 			selectedInfo.textContent = 'No selection';
-			stage.querySelectorAll('.obj').forEach(el=>el.style.outline='');
+			const ex = document.getElementById('zControl'); if(ex) ex.remove();
+			renderer.render();
 		});
 
 		// initial render
