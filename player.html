@@ -36,6 +36,7 @@
 		<header>
 			<h1>Player — Objects Preview</h1>
 			<div class="toolbar"></div>
+			<div id="selectedInfo" style="display:none;margin-left:12px;color:var(--muted)"></div>
 		</header>
 
 		<main>
@@ -45,19 +46,7 @@
 			</section>
 		</main>
 
-		<!-- overlay panel -->
-		<div class="overlay" id="overlay">
-			<h2>Objects</h2>
-			<div class="meta">Scene objects and quick actions</div>
-			<div style="display:flex;gap:8px;margin-bottom:8px">
-				<button id="addBtn">Add random object</button>
-				<button id="clearBtn">Clear objects</button>
-				<button id="centerBtn">Center selected</button>
-				<button id="toggleOverlay">Toggle</button>
-			</div>
-			<div class="object-list" id="objectList" style="margin-bottom:8px"></div>
-			<div id="selectedInfo" class="muted">No selection</div>
-		</div>
+
 
 		<!-- pause menu -->
 		<div id="pauseMenu" style="display:none; position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(2,6,23,0.9);color:#e6eef6;padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);z-index:40;min-width:260px;text-align:center">
@@ -257,6 +246,45 @@
 
 		// Convert plain object literals to GameObject instances
 		objects = objects.map(o => new GameObject(o));
+		// ensure each object has a world coordinate (default world 0)
+		for(const o of objects) if(typeof o.world === 'undefined') o.world = 0;
+
+		// WorldObject base class (derives from GameObject)
+		class WorldObject extends GameObject {
+			constructor(data){
+				super(data);
+				this.world = (data && data.world) || 0;
+			}
+		}
+
+		// abstract-ish Tree1 class derived from WorldObject
+		class Tree1 extends WorldObject {
+			constructor(data){ super(data); }
+			// spawn a tree at x,z in given world
+			static spawn(x,z, world=0){
+				const id = Date.now() + Math.floor(Math.random()*1000);
+				const t = new WorldObject({ id, name: 'Tree', x:x, y:0, z:z, color:'#8B5A2B', actions:[{key:'x',name:'cut'}], world });
+				// trunk mesh + canopy tets
+				buildCylinderMesh(t, 6, 40, 18);
+				// add simple canopy tetrahedrons above trunk
+				t.tetrahedrons = [
+					{a:{x:x-20,y:40,z:z-20},b:{x:x+20,y:40,z:z-20},c:{x:x,y:80,z:z},d:{x:x,y:55,z:z-40}},
+					{a:{x:x-20,y:45,z:z+20},b:{x:x+20,y:45,z:z+20},c:{x:x,y:85,z:z},d:{x:x,y:60,z:z+40}}
+				];
+				objects.push(t);
+				return t;
+			}
+		}
+
+		// Ladder class
+		class Ladder extends WorldObject {
+			constructor(data){
+				super(data);
+				this.actions = this.actions || [];
+				this.actions.push({key:'c', name:'climb'});
+				this.climbHeight = data && typeof data.climbHeight !== 'undefined' ? data.climbHeight : -60;
+			}
+		}
 
 		// helper: build a cylinder mesh (local coords) and store as _baseTris
 		function buildCylinderMesh(obj, radius = 6, height = 40, segments = 12){
@@ -316,6 +344,32 @@
 			}
 		}
 
+		// spawn additional trees using Tree1
+		Tree1.spawn(420, 600, 0);
+		Tree1.spawn(240, 700, 0);
+
+		// create a ladder and a floating platform next to it
+		const ladderId = Date.now() + 1;
+		const ladder = new Ladder({ id: ladderId, name:'Ladder', x: 200, y:0, z: 520, color:'#c68642', world:0 });
+		// ladder represented by a thin tall tetrahedron
+		ladder.tetrahedrons = [ { a:{x:194,y:0,z:516}, b:{x:206,y:0,z:516}, c:{x:206,y:-120,z:524}, d:{x:194,y:-120,z:524} } ];
+		objects.push(ladder);
+
+		// floating platform next to ladder
+		const platId = Date.now() + 2;
+		const platform = new WorldObject({ id: platId, name:'Platform', x: 200, y:-128, z: 560, color:'#64748b', world:0 });
+		// platform as a flat tetrahedron-ish prism
+		platform.tetrahedrons = [ { a:{x:180,y:-128,z:540}, b:{x:220,y:-128,z:540}, c:{x:220,y:-120,z:580}, d:{x:180,y:-120,z:580} } ];
+		objects.push(platform);
+
+		// portal between worlds (world 0 <-> world 1)
+		const portal = new WorldObject({ id: Date.now()+3, name:'Portal', x: 600, y:0, z: 520, color:'#7c3aed', world:0 });
+		portal.actions = [{ key:'q', name:'enter' }];
+		portal.tetrahedrons = [ { a:{x:590,y:0,z:510}, b:{x:610,y:0,z:510}, c:{x:610,y:60,z:530}, d:{x:590,y:60,z:530} } ];
+		objects.push(portal);
+
+		// ensure objects array is available to renderer (it will filter by world)
+
 		// find player reference and set up player physics state
 		let player = objects.find(o=>o.isplayer);
 		if(!player){
@@ -341,21 +395,25 @@
 		const stage = document.getElementById('stage');
 		const canvas = document.getElementById('canvas');
 		const ctx = canvas.getContext('2d');
-		const objectList = document.getElementById('objectList');
-		const overlay = document.getElementById('overlay');
-		const toggleOverlayBtn = document.getElementById('toggleOverlay');
-		const addBtn = document.getElementById('addBtn');
-		const clearBtn = document.getElementById('clearBtn');
-		const centerBtn = document.getElementById('centerBtn');
+		// toolbar buttons will be created programmatically; selectedInfo is in header
+		const addBtn = null; // replaced after toolbar creation
+		const clearBtn = null;
+		const centerBtn = null;
 		const selectedInfo = document.getElementById('selectedInfo');
 
 		// add Inventory button to header toolbar
 		(function(){
 			const tb = document.querySelector('.toolbar');
 			if(tb){
-				const b = document.createElement('button'); b.id='toolbarInventoryBtn'; b.textContent='Inventory';
-				b.addEventListener('click', ()=>{ inventoryOpen = true; document.getElementById('inventoryPanel').style.display=''; renderInventory(); });
-				tb.appendChild(b);
+				// Inventory button
+				const inv = document.createElement('button'); inv.id='toolbarInventoryBtn'; inv.textContent='Inventory';
+				inv.addEventListener('click', ()=>{ inventoryOpen = true; document.getElementById('inventoryPanel').style.display=''; renderInventory(); });
+				tb.appendChild(inv);
+				// add / clear / center buttons moved to toolbar now that overlay is removed
+				const addB = document.createElement('button'); addB.id='addBtn'; addB.textContent='Add Obj'; addB.addEventListener('click', addRandomObject);
+				const clrB = document.createElement('button'); clrB.id='clearBtn'; clrB.textContent='Clear'; clrB.addEventListener('click', clearObjects);
+				const cenB = document.createElement('button'); cenB.id='centerBtn'; cenB.textContent='Center'; cenB.addEventListener('click', centerSelected);
+				tb.appendChild(addB); tb.appendChild(clrB); tb.appendChild(cenB);
 			}
 		})();
 
@@ -438,6 +496,7 @@
 			drawTetrahedrons(){
 				const ctx = this.ctx;
 				for(const obj of this.objects){
+					if(obj.world !== this.player.world) continue;
 					if(!obj.tetrahedrons) continue;
 					for(const tet of obj.tetrahedrons){
 						const faces = [[tet.a,tet.b,tet.c],[tet.a,tet.b,tet.d],[tet.a,tet.c,tet.d],[tet.b,tet.c,tet.d]];
@@ -464,6 +523,7 @@
 				const ctx = this.ctx;
 				const renderList = [];
 				for(const obj of this.objects){
+					if(obj.world !== this.player.world) continue;
 					if(!obj._renderTris) continue;
 					for(const tri of obj._renderTris){
 						// compute average depth for sorting
@@ -485,8 +545,8 @@
 
 			drawObjects(){
 				const ctx = this.ctx;
-				// Only draw objects that have textures; hide circular placeholders
-				const projected = this.objects.map(o=>({o,p:this.projectPoint(o)})).filter(x=>x.p && x.o.texture && x.o.texture.complete);
+				// Only draw objects that are in the current world and have textures; hide circular placeholders
+				const projected = this.objects.filter(o=>o.world === this.player.world).map(o=>({o,p:this.projectPoint(o)})).filter(x=>x.p && x.o.texture && x.o.texture.complete);
 				projected.sort((a,b)=>b.p.z - a.p.z);
 				for(const item of projected){
 					const o = item.o, p = item.p; const size = 56 * p.scale;
@@ -605,6 +665,7 @@
 				}
 
 				for(const o of this.objects){
+					if(o.world !== this.player.world) continue;
 					// check mesh triangles first (obj._renderTris)
 					if(o._renderTris){
 						for(const tri of o._renderTris){
@@ -743,6 +804,7 @@
 		function isBlockedByWorld(pos){
 			// pos: {x,y,z} center of player sphere
 			for(const obj of objects){
+				if(obj.world !== player.world) continue;
 				if(!(obj.isworld || obj.iswall)) continue;
 				if(!obj.tetrahedrons) continue;
 				for(const tet of obj.tetrahedrons){
@@ -845,7 +907,18 @@
 						} else {
 							// default interact: add a property interactions++
 							obj.interactions = (obj.interactions||0) + 1;
-							console.log('Interacted with',obj.name,obj.interactions);
+								console.log('Interacted with',obj.name,obj.interactions);
+								// portal: entering
+								if(obj.name && obj.name.toLowerCase() === 'portal'){
+									// toggle world
+									const targetWorld = (player.world === 0) ? 1 : 0;
+									player.world = targetWorld;
+									// simple teleport: move player to a spawn point depending on world
+									if(targetWorld === 1){ player.x = 100; player.z = 100; player.y = 0; }
+									else { player.x = 300; player.z = 200; player.y = 0; }
+									showPickup('Entered world ' + player.world);
+									console.log('Player moved to world', player.world);
+								}
 						}
 					}
 				}
@@ -975,6 +1048,18 @@
 				}
 				return;
 			}
+
+			// climb action for Ladder
+			if(name === 'climb' || key === 'c'){
+				// move player to top of ladder / platform
+				player.x = obj.x;
+				player.z = obj.z + 40; // jump forward onto platform area
+				player.y = (obj.climbHeight || -60);
+				player.vel.y = 0;
+				showPickup('Climbed ladder');
+				saveState(); refresh();
+				return;
+			}
 			// other action hooks can go here
 		}
 
@@ -1006,7 +1091,7 @@
 		// save/load state to cookies
 		function saveState(){
 			try{
-				const state = { objects: objects.map(o=>({id:o.id,x:o.x,y:o.y,z:o.z,opened:o.opened,collected:o.collected})),
+				const state = { objects: objects.map(o=>({id:o.id,x:o.x,y:o.y,z:o.z,opened:o.opened,collected:o.collected, world:o.world})),
 					player:{x:player.x,y:player.y,z:player.z}, inventory, timestamp: Date.now() };
 				document.cookie = 'game_state=' + encodeURIComponent(JSON.stringify(state)) + ';max-age='+(60*60*24*365)+';path=/';
 				console.log('Saved state to cookies');
@@ -1021,7 +1106,7 @@
 				const state = JSON.parse(val);
 				if(state.player){ player.x = state.player.x; player.y = state.player.y; player.z = state.player.z; }
 					if(state.objects){
-						for(const s of state.objects){ const o = objects.find(x=>x.id===s.id); if(o){ o.x=s.x; o.y=s.y; o.z=s.z; o.opened = !!s.opened; o.collected = !!s.collected; if(o.opened) o.lidTarget = -Math.PI * 0.65; else o.lidTarget = 0; }}
+						for(const s of state.objects){ const o = objects.find(x=>x.id===s.id); if(o){ o.x=s.x; o.y=s.y; o.z=s.z; o.opened = !!s.opened; o.collected = !!s.collected; if(o.opened) o.lidTarget = -Math.PI * 0.65; else o.lidTarget = 0; if(typeof s.world !== 'undefined') o.world = s.world; }}
 					}
 				if(state.inventory) inventory = state.inventory;
 				console.log('Loaded state from cookies');
@@ -1035,26 +1120,7 @@
 
 
 		function renderList(){
-			objectList.innerHTML = '';
-			objects.forEach(obj=>{
-				const row = document.createElement('div');
-				row.className = 'object-row';
-				row.dataset.id = obj.id;
-
-				const color = document.createElement('div');
-				color.className = 'object-color';
-				color.style.background = obj.color;
-
-				const meta = document.createElement('div');
-				meta.innerHTML = `<div style="font-weight:700">${obj.name}</div><div class="muted">id:${obj.id} — ${Math.round(obj.x)},${Math.round(obj.y)}</div>`;
-
-				row.appendChild(color);
-				row.appendChild(meta);
-
-				row.addEventListener('click', ()=> selectObject(obj.id));
-
-				objectList.appendChild(row);
-			});
+			renderer.render();
 		}
 
 		function selectObject(id){
@@ -1072,24 +1138,10 @@
 
 		// render a Z slider for the selected object inside the overlay
 		function renderSelectedZControl(obj){
-			let existing = document.getElementById('zControl');
-			if(existing) existing.remove();
-			const wrap = document.createElement('div');
-			wrap.id = 'zControl';
-			wrap.style.marginTop = '8px';
-			wrap.innerHTML = `
-				<div style="font-size:13px;margin-bottom:6px">Depth (z): <span id="zValue">${obj.z || 0}</span>px</div>
-				<input type="range" id="zRange" min="-600" max="600" step="1" value="${obj.z || 0}" />
-			`;
-
-			wrap.querySelector('#zRange').addEventListener('input', (e)=>{
-				const v = Number(e.target.value);
-				obj.z = v;
-				wrap.querySelector('#zValue').textContent = v;
-				refresh();
-			});
-
-			overlay.appendChild(wrap);
+			// simplified: show selected object brief info in the header selectedInfo area
+			if(!selectedInfo) return;
+			selectedInfo.style.display = '';
+			selectedInfo.textContent = `${obj.name} — z:${Math.round(obj.z||0)}`;
 		}
 
 		// helpers
@@ -1160,9 +1212,7 @@
 			showPickup('Put down ' + it.name);
 			saveState(); renderInventory(); refresh();
 		});
-		addBtn.addEventListener('click', addRandomObject);
-		clearBtn.addEventListener('click', clearObjects);
-		centerBtn.addEventListener('click', centerSelected);
+		// toolbar buttons wired when created in the header IIFE
 
 		// click stage to deselect
 		stage.addEventListener('click', ()=>{
