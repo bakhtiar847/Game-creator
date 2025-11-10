@@ -71,6 +71,21 @@
 		// Objects now have richer structure:
 		// { id, name, x,y,z (origin), triangles: [{p1:{x,y,z}, p2, p3}], tetrahedrons: [{a,b,c,d}], actions: [{key,name}], flags: isplayer,isworld,iswall }
 		let objects = [
+			// green floor object (large area under ground)
+			{
+				id:4,
+				name:'Floor',
+				x:0,y:-45,z:0,
+				triangles:[],
+				tetrahedrons:[
+					{a:{x:-2000,y:-50,z:-2000},b:{x:2000,y:-50,z:-2000},c:{x:2000,y:-50,z:2000},d:{x:-2000,y:-40,z:2000}}
+				],
+				actions:[],
+				isworld:true,
+				iswall:true,
+				color:'#16a34a',
+				description:'Green floor object'
+			},
 			{
 				id:1,
 				name:'Player',
@@ -412,10 +427,14 @@
 			lastFrame = now;
 
 			// controls: arrows to look (adjust player rotation), WASD to move relative to player rotation
-			if(keysDown.has('arrowleft')){ player.rotY = (player.rotY || 0) - 2.5 * dt; }
-			if(keysDown.has('arrowright')){ player.rotY = (player.rotY || 0) + 2.5 * dt; }
-			if(keysDown.has('arrowup')){ player.pitch = Math.max(-1.2,(player.pitch||0) - 2.5 * dt); }
-			if(keysDown.has('arrowdown')){ player.pitch = Math.min(1.2,(player.pitch||0) + 2.5 * dt); }
+			// camera rotation (arrow keys) — camera drives player orientation
+			if(keysDown.has('arrowleft')){ camera.rotY = (camera.rotY || 0) - 2.5 * dt; }
+			if(keysDown.has('arrowright')){ camera.rotY = (camera.rotY || 0) + 2.5 * dt; }
+			if(keysDown.has('arrowup')){ camera.rotX = Math.max(-1.2,(camera.rotX||0) - 2.5 * dt); }
+			if(keysDown.has('arrowdown')){ camera.rotX = Math.min(1.2,(camera.rotX||0) + 2.5 * dt); }
+			// sync player orientation to camera
+			player.rotY = camera.rotY || 0;
+			player.pitch = camera.rotX || 0;
 
 			// movement vector in local space
 			let mvx=0, mvz=0;
@@ -426,11 +445,12 @@
 			const len = Math.hypot(mvx,mvz);
 			if(len>0){ mvx/=len; mvz/=len; }
 
-			// rotate movement by player.rotY
-			const rot = player.rotY || 0;
-			const sinR = Math.sin(rot), cosR = Math.cos(rot);
-			const worldDX = mvx * cosR - mvz * sinR;
-			const worldDZ = mvx * sinR + mvz * cosR;
+			// movement is relative to camera forward direction projected flat
+			const rot = camera.rotY || 0;
+			const forwardX = Math.sin(rot), forwardZ = Math.cos(rot);
+			const rightX = Math.cos(rot), rightZ = -Math.sin(rot);
+			const worldDX = forwardX * mvz + rightX * mvx;
+			const worldDZ = forwardZ * mvz + rightZ * mvx;
 
 			// desired new position (horizontal)
 			const speed = player.speed;
