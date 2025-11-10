@@ -111,19 +111,13 @@
 				id:3,
 				name:'Chest',
 				x:300,y:0,z:500,
-				// triangles are defined in local object-space (relative to x,y,z)
 				triangles:[],
-				// we'll use a simple AABB for collision (rectangular prism base)
-				box:null,
+				tetrahedrons:[{a:{x:280,y:0,z:480},b:{x:320,y:0,z:480},c:{x:320,y:60,z:520},d:{x:280,y:60,z:520}}],
 				actions:[{key:'q',name:'open'}, {key:'z',name:'special'}],
 				isworld:false,
 				iswall:false,
 				color:'#f59e0b',
-				description:'A treasure chest with loot.',
-				// lid state
-				lidAngle:0,
-				lidTarget:0,
-				lidSpeed:3
+				description:'A treasure chest with loot.'
 			}
 		];
 
@@ -139,6 +133,62 @@
 
 		// auto-load textures if objects specify textureSrc
 		for(const o of objects){ if(o.textureSrc) loadTexture(o, o.textureSrc); }
+
+		// --- Chest mesh builder (rectangular prism + curved lid template) ---
+		function buildChestMesh(obj){
+			// dimensions
+			const w = 80, h = 40, d = 60; // width(x), height(y), depth(z)
+			const hw = w/2, hd = d/2;
+			// base corners (local coords)
+			const v = {
+				p000: {x:-hw,y:0,z:-hd}, p100:{x:hw,y:0,z:-hd}, p010:{x:-hw,y:h,z:-hd}, p110:{x:hw,y:h,z:-hd},
+				p001:{x:-hw,y:0,z:hd}, p101:{x:hw,y:0,z:hd}, p011:{x:-hw,y:h,z:hd}, p111:{x:hw,y:h,z:hd}
+			};
+			// base triangles (omit top face, lid will cover)
+			const tris = [];
+			function t(a,b,c){ tris.push([a,b,c]); }
+			// front face (z = hd)
+			t(v.p001,v.p101,v.p111); t(v.p001,v.p111,v.p011);
+			// back face (z = -hd)
+			t(v.p100,v.p000,v.p010); t(v.p100,v.p010,v.p110);
+			// left face (x = -hw)
+			t(v.p000,v.p001,v.p011); t(v.p000,v.p011,v.p010);
+			// right face (x = hw)
+			t(v.p101,v.p100,v.p110); t(v.p101,v.p110,v.p111);
+			// bottom face
+			t(v.p000,v.p100,v.p101); t(v.p000,v.p101,v.p001);
+
+			// lid template: approximate curved lid along width with segments
+			const segments = 9;
+			const lid = {verts:[], indices:[]};
+			for(let i=0;i<segments;i++){
+				const tNorm = i/(segments-1);
+				const x = -hw + tNorm * w;
+				// semicircular arc in local Y above top h
+				const arc = Math.sin(Math.PI * tNorm) * 20; // lid bulge
+				// back point (z = -hd) and front point (z = hd)
+				lid.verts.push({x:x,y:h+arc,z:-hd}); // back
+				lid.verts.push({x:x,y:h+arc,z:hd});  // front
+			}
+			// indices (quads between segments -> two tris)
+			for(let i=0;i<segments-1;i++){
+				const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
+				// two triangles: back(i)->front(i)->front(i+1) and back(i)->front(i+1)->back(i+1)
+				lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[d]]);
+				lid.indices.push([lid.verts[a], lid.verts[d], lid.verts[c]]);
+			}
+
+			obj._baseTris = tris; // array of [a,b,c] where a,b,c are vertex objects with local coords
+			obj._lidTemplate = lid; // contains verts (local) and indices (triples of vertex objects)
+			obj._chestDims = {w,h,d,hw,hd};
+			// state
+			obj.opened = obj.opened || false;
+			obj.lidAngle = obj.lidAngle || 0; // radians, 0 closed
+			obj.lidTarget = obj.lidTarget || 0; // target angle
+		}
+
+		// build chest mesh for existing chest objects
+		for(const o of objects){ if(o.name && o.name.toLowerCase() === 'chest') buildChestMesh(o); }
 
 		// find player reference and set up player physics state
 		let player = objects.find(o=>o.isplayer);
@@ -249,7 +299,6 @@
 				const ctx = this.ctx;
 				for(const obj of this.objects){
 					if(!obj.tetrahedrons) continue;
-					
 					for(const tet of obj.tetrahedrons){
 						const faces = [[tet.a,tet.b,tet.c],[tet.a,tet.b,tet.d],[tet.a,tet.c,tet.d],[tet.b,tet.c,tet.d]];
 						for(const face of faces){
@@ -265,45 +314,30 @@
 						}
 					}
 				}
-				// also draw triangle meshes (for boxes/lids)
+			}
+
+			// draw arbitrary triangles from object meshes (triangles are provided in world coords)
+			drawTriangles(){
+				const ctx = this.ctx;
+				const renderList = [];
 				for(const obj of this.objects){
-					if(!obj.triangles || obj.triangles.length===0) continue;
-					for(const tri of obj.triangles){
-						// tri: {p1:{x,y,z},p2,p3, part?:'lid'|'base'} local coords
-						const toWorld = (lp)=>{
-							let wx = obj.x + lp.x;
-							let wy = obj.y + lp.y;
-							let wz = obj.z + lp.z;
-							// if this is lid, apply rotation around hinge at back-top edge (y = baseTop, z = +hz)
-							if(tri.part === 'lid'){
-								const lidAng = obj.lidAngle || 0;
-								// hinge at y = baseTop (we used y values accordingly), z = +hz -> local hinge
-								const hingeY = obj._hingeY || (obj._hingeY = (obj._dims?obj._dims.topY:30));
-								const hingeZ = obj._hingeZ || (obj._hingeZ = (obj._dims?obj._dims.hz:25));
-								// convert world back to local relative to hinge
-								const lx = lp.x;
-								let ly = lp.y - hingeY;
-								let lz = lp.z - hingeZ;
-								// rotate around local X axis
-								const ca = Math.cos(lidAng), sa = Math.sin(lidAng);
-								const ry = ly * ca - lz * sa;
-								const rz = ly * sa + lz * ca;
-								wy = obj.y + hingeY + ry;
-								wz = obj.z + hingeZ + rz;
-								wx = obj.x + lx;
-							}
-							return {x:wx,y:wy,z:wz};
-						};
-						const pa = this.projectPoint(toWorld(tri.p1));
-						const pb = this.projectPoint(toWorld(tri.p2));
-						const pc = this.projectPoint(toWorld(tri.p3));
+					if(!obj._renderTris) continue;
+					for(const tri of obj._renderTris){
+						// compute average depth for sorting
+						const pa = this.projectPoint(tri[0]);
+						const pb = this.projectPoint(tri[1]);
+						const pc = this.projectPoint(tri[2]);
 						if(!pa||!pb||!pc) continue;
-						ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.lineTo(pc.x,pc.y); ctx.closePath();
-						ctx.fillStyle = hexToRgba(obj.color||'#888', 0.12); ctx.fill();
-						ctx.strokeStyle = obj.color||'#888'; ctx.lineWidth = 1; ctx.stroke();
+						renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3});
 					}
 				}
-			}
+				renderList.sort((a,b)=>b.depth - a.depth);
+				for(const it of renderList){
+					const obj = it.obj; const pa = it.pa, pb = it.pb, pc = it.pc;
+					ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.lineTo(pc.x,pc.y); ctx.closePath();
+					ctx.fillStyle = hexToRgba(obj.color||'#888', 0.95);
+					ctx.fill(); ctx.strokeStyle = shadeColor(obj.color||'#444', 0.9); ctx.lineWidth=1; ctx.stroke();
+				}
 			}
 
 			drawObjects(){
@@ -344,7 +378,83 @@
 				// camera orientation follows player view
 				this.camera.rotY = this.player.rotY || 0;
 				this.camera.rotX = this.player.pitch || 0;
-				this.drawFloor(); this.drawTetrahedrons(); this.drawObjects();
+				this.drawFloor(); this.drawTetrahedrons();
+				// update per-object render triangles (e.g., chest lid transform)
+				for(const obj of this.objects){
+					if(obj._baseTris){
+						// build world-space triangles array
+						obj._renderTris = [];
+						// base (translate local corners to world)
+						for(const t of obj._baseTris){
+							const a = {x: obj.x + t[0].x, y: obj.y + t[0].y, z: obj.z + t[0].z};
+							const b = {x: obj.x + t[1].x, y: obj.y + t[1].y, z: obj.z + t[1].z};
+							const c = {x: obj.x + t[2].x, y: obj.y + t[2].y, z: obj.z + t[2].z};
+							obj._renderTris.push([a,b,c]);
+						}
+						// lid: rotate verts around hinge (back top edge)
+						if(obj._lidTemplate){
+							const lid = obj._lidTemplate; const dims = obj._chestDims;
+							const hingeY = dims.h; const hingeZ = -dims.hd; // local hinge
+							const angle = obj.lidAngle || 0;
+							// precompute rotated verts
+							const rotated = [];
+							for(const lv of lid.verts){
+								// rotate point (lv.x, lv.y, lv.z) about axis along x through (y=hingeY, z=hingeZ)
+								const dx = lv.x;
+								const dy = lv.y - hingeY;
+								const dz = lv.z - hingeZ;
+								const cosy = Math.cos(angle), siny = Math.sin(angle);
+								// rotation around local X axis
+								const ry = hingeY + (cosy * dy - siny * dz);
+								const rz = hingeZ + (siny * dy + cosy * dz);
+								rotated.push({x: dx, y: ry, z: rz});
+							}
+							// build triangles from indices using rotated verts
+							for(const tri of lid.indices){
+								// tri entries are vertex objects; need to find index by matching reference - easier: compute using consistent ordering
+								// compute base index by locating tri[0] within lid.verts sequence
+								const i0 = lid.verts.indexOf(tri[0]);
+								const i1 = lid.verts.indexOf(tri[1]);
+								const i2 = lid.verts.indexOf(tri[2]);
+								if(i0<0||i1<0||i2<0) continue;
+								const a = {x: obj.x + rotated[i0].x, y: obj.y + rotated[i0].y, z: obj.z + rotated[i0].z};
+								const b = {x: obj.x + rotated[i1].x, y: obj.y + rotated[i1].y, z: obj.z + rotated[i1].z};
+								const c = {x: obj.x + rotated[i2].x, y: obj.y + rotated[i2].y, z: obj.z + rotated[i2].z};
+								obj._renderTris.push([a,b,c]);
+							}
+						}
+					}
+				}
+				this.drawTriangles();
+				this.drawObjects();
+
+				// draw crosshair at center
+				const cx = this.canvas.width/2 / (window.devicePixelRatio||1);
+				const cy = this.canvas.height/2 / (window.devicePixelRatio||1);
+				const ctx = this.ctx;
+				ctx.save();
+				ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.5;
+				ctx.beginPath(); ctx.moveTo(cx-10,cy); ctx.lineTo(cx+10,cy); ctx.moveTo(cx,cy-10); ctx.lineTo(cx,cy+10); ctx.stroke();
+				ctx.restore();
+
+				// show interact hint if chest is at center
+				const centerObj = this.getObjectInCenter();
+				if(centerObj && centerObj.name && centerObj.name.toLowerCase() === 'chest'){
+					// project object's origin
+					const p = this.projectPoint(centerObj);
+					if(p){
+						ctx.save();
+						ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline='bottom';
+						const text = centerObj.opened ? 'Chest opened' : 'Press Q to open';
+						// draw bubble
+						const padding = 8; const metrics = ctx.measureText(text); const tw = metrics.width + padding*2; const th = 28;
+						ctx.fillStyle = 'rgba(2,6,23,0.7)'; ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+						// bubble centered above chest projection
+						ctx.fillRect(p.x - tw/2, p.y - 48 - th, tw, th);
+						ctx.fillStyle = '#e6eef6'; ctx.fillText(text, p.x, p.y - 48 - th/2 + 4);
+						ctx.restore();
+					}
+				}
 			}
 
 			getObjectAtScreen(x,y){
@@ -520,13 +630,20 @@
 				inventoryOpen = !inventoryOpen;
 				console.log('Inventory',inventoryOpen);
 			}
-			// interact
+			// interact: if chest is centered, open/close lid on 'q'
 			if(k === 'q'){
-				const obj = getObjectInCenter();
+				const obj = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
 				if(obj){
-					// default interact: add a property interactions++
-					obj.interactions = (obj.interactions||0) + 1;
-					console.log('Interacted with',obj.name,obj.interactions);
+					if(obj.name && obj.name.toLowerCase() === 'chest'){
+						// toggle open target
+						if(!obj.opened){ obj.opened = true; obj.lidTarget = -Math.PI * 0.65; }
+						else { obj.opened = false; obj.lidTarget = 0; }
+						console.log('Chest state ->', obj.opened ? 'opening' : 'closing');
+					} else {
+						// default interact: add a property interactions++
+						obj.interactions = (obj.interactions||0) + 1;
+						console.log('Interacted with',obj.name,obj.interactions);
+					}
 				}
 			}
 			// other object-defined keys (zxc... etc)
@@ -598,6 +715,17 @@
 			// jump (space)
 			if(keysDown.has(' ' ) || keysDown.has('space') ){
 				if(player.onGround){ player.vel.y = -player.jumpImpulse; player.onGround = false; }
+			}
+
+			// animate chest lids towards their target angles
+			for(const obj of objects){
+				if(obj._lidTemplate){
+					const speed = 4.0; // radians per second
+					const delta = obj.lidTarget - (obj.lidAngle || 0);
+					const maxStep = speed * dt;
+					let step = Math.max(-maxStep, Math.min(maxStep, delta));
+					obj.lidAngle = (obj.lidAngle || 0) + step;
+				}
 			}
 
 			// update camera and render via renderer
