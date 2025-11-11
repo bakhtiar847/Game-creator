@@ -345,27 +345,71 @@
 		Tree1.spawn(420, 600, 0);
 		Tree1.spawn(240, 700, 0);
 
-		// create a ladder and a floating platform next to it
-		const ladderId = Date.now() + 1;
-		const ladder = new Ladder({ id: ladderId, name:'Ladder', x: 200, y:0, z: 520, color:'#c68642', world:0 });
-		// ladder represented by a thin tall tetrahedron (top is positive Y)
-		ladder.tetrahedrons = [ { a:{x:194,y:0,z:516}, b:{x:206,y:0,z:516}, c:{x:206,y:80,z:524}, d:{x:194,y:80,z:524} } ];
-		objects.push(ladder);
+		// Platform class
+		class Platform extends WorldObject {
+			constructor(data){ super(data); }
+			static spawn(x,y,z,world=0){
+				const id = Date.now() + Math.floor(Math.random()*1000);
+				const p = new Platform({ id, name:'Platform', x:x,y:y,z:z, color:'#64748b', world: world, isworld:true, iswall:true });
+				p.tetrahedrons = [ { a:{x:x-20,y:y-2,z:z-20}, b:{x:x+20,y:y-2,z:z-20}, c:{x:x+20,y:y+2,z:z+20}, d:{x:x-20,y:y+2,z:z+20} } ];
+				objects.push(p); return p;
+			}
+		}
 
-		// floating platform next to ladder
-		const platId = Date.now() + 2;
-		const platform = new WorldObject({ id: platId, name:'Platform', x: 200, y:80, z: 560, color:'#64748b', world:0 });
-		// platform as a flat tetrahedron-ish prism elevated above ground
-		platform.tetrahedrons = [ { a:{x:180,y:78,z:540}, b:{x:220,y:78,z:540}, c:{x:220,y:82,z:580}, d:{x:180,y:82,z:580} } ];
-		objects.push(platform);
-		// set ladder climb height to platform top
+		// Ladder & Platform spawn
+		const ladder = Ladder.spawn(200, 0, 520, 0);
+		const platform = Platform.spawn(200, 80, 560, 0);
 		ladder.climbHeight = platform.y + 4;
 
-		// portal between worlds (world 0 <-> world 1)
-		const portal = new WorldObject({ id: Date.now()+3, name:'Portal', x: 600, y:0, z: 520, color:'#7c3aed', world:0 });
-		portal.actions = [{ key:'q', name:'enter' }];
-		portal.tetrahedrons = [ { a:{x:590,y:0,z:510}, b:{x:610,y:0,z:510}, c:{x:610,y:60,z:530}, d:{x:590,y:60,z:530} } ];
-		objects.push(portal);
+		// Portal class
+		class Portal extends WorldObject {
+			constructor(data){
+				super(data);
+				this.actions = this.actions || [];
+				this.actions.push({ key:'q', name:'enter' });
+			}
+			enter(){
+				const targetWorld = (player.world === 0) ? 1 : 0;
+				player.world = targetWorld;
+				if(targetWorld === 1){ player.x = 100; player.z = 100; player.y = 0; }
+				else { player.x = 300; player.z = 200; player.y = 0; }
+				showPickup('Entered world ' + player.world);
+				console.log('Player moved to world', player.world);
+			}
+			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const p = new Portal({ id, name:'Portal', x,y,z,color:'#7c3aed',world}); p.tetrahedrons=[{a:{x:x-10,y:y,z:z-10},b:{x:x+10,y:y,z:z-10},c:{x:x+10,y:y+60,z:z+10},d:{x:x-10,y:y+60,z:z+10}}]; objects.push(p); return p; }
+		}
+
+		// spawn a portal
+		Portal.spawn(600,0,520,0);
+
+		// Chest class
+		class Chest extends WorldObject {
+			constructor(data){
+				super(data);
+				this.opened = !!this.opened;
+				this.collected = !!this.collected;
+				buildChestMesh(this);
+				this.actions = this.actions || [];
+				this.actions.push({ key:'q', name:'open' });
+			}
+			open(){
+				if(!this.opened){
+					this.opened = true; this.lidTarget = -Math.PI * 0.65;
+					if(!this.collected){ this.collected = true; const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new InventoryItem('gold','Gold',1)); showPickup('Picked up Gold'); saveState(); }
+				} else { this.opened = false; this.lidTarget = 0; }
+			}
+			update(dt){
+				if(this._lidTemplate){ const speed = 4.0; const delta = this.lidTarget - (this.lidAngle || 0); const maxStep = speed * dt; let step = Math.max(-maxStep, Math.min(maxStep, delta)); this.lidAngle = (this.lidAngle || 0) + step; }
+			}
+			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const c = new Chest({id,name:'Chest',x,y,z,color:'#8B5A2B',world}); objects.push(c); return c; }
+		}
+
+		// convert any existing chest-like objects into Chest instances (remove originals)
+		for(let i=objects.length-1;i>=0;i--){ const o=objects[i]; if(o.name && o.name.toLowerCase()==='chest'){ objects.splice(i,1); Chest.spawn(o.x,o.y,o.z,o.world); } }
+
+		// spawn a couple more chests
+		Chest.spawn(340,0,480,0);
+		Chest.spawn(480,0,520,0);
 
 		// ensure objects array is available to renderer (it will filter by world)
 
