@@ -329,6 +329,40 @@
 		// spawn a portal (paired): this portal goes to world 1 at x:100,z:100
 		Portal.spawn(600,0,520,0, { target: { x:100, y:0, z:100, world:1 } });
 
+		// Door class: toggle open/closed with Q (when centered)
+		class Door extends WorldObject {
+			constructor(data){
+				super(data);
+				this.open = !!this.open;
+				this.actions = this.actions || [];
+				this.actions.push({ key: 'q', name: 'toggle' });
+				// doors block when closed
+				this.iswall = !this.open;
+			}
+			open(){ this.toggle(); }
+			close(){ this.open = false; this.iswall = true; showPickup('Door closed'); }
+			toggle(){ if(this.open){ this.close(); } else { this.open = true; this.iswall = false; showPickup('Door opened'); } }
+			static spawn(x,y,z,world=0){
+				const id = Date.now()+Math.floor(Math.random()*1000);
+				const w = 8, h = 80, d = 40; // thin door
+				const hx = w/2, hy = h/2, hz = d/2;
+				const d0 = {x:x-hx,y:y,z:z-hz};
+				const d1 = {x:x+hx,y:y,z:z-hz};
+				const d2 = {x:x-hx,y:y,z:z+hz};
+				const d3 = {x:x+hx,y:y,z:z+hz};
+				const d4 = {x:x-hx,y:y+hy,z:z-hz};
+				const d5 = {x:x+hx,y:y+hy,z:z-hz};
+				const d6 = {x:x-hx,y:y+hy,z:z+hz};
+				const d7 = {x:x+hx,y:y+hy,z:z+hz};
+				const door = new Door({ id, name:'Door', x,y,z, color:'#8b5a2b', world, isworld:true, iswall:true });
+				door.tetrahedrons = [ {a:d0,b:d1,c:d2,d:d4}, {a:d1,b:d2,c:d3,d:d7}, {a:d1,b:d4,c:d5,d:d7}, {a:d2,b:d4,c:d6,d:d7}, {a:d1,b:d2,c:d4,d:d7} ];
+				objects.push(door); return door;
+			}
+		}
+
+		// spawn a sample door near the player for testing
+		Door.spawn(260,0,520,0);
+
 		// Chest class
 		class Chest extends WorldObject {
 			constructor(data){
@@ -482,9 +516,10 @@
 		let inventoryOpen = false; // toggles inventory panel
 		let inventory = []; // array of items: {id,name,qty}
 		// equipped slot/selection via z,x,c,v,b,n,m keys
-		let equippedIndex = null;
-		let equippedItem = null;
+		// equip slots: each entry stores an inventory index (or null)
 		const slotKeys = ['z','x','c','v','b','n','m'];
+		let equippedSlots = new Array(slotKeys.length).fill(null);
+		let selectedSlot = 0; // currently selected equip slot index
 
 		let paused = false;
 
@@ -509,11 +544,16 @@
 				// equip button + display
 				const equipBtn = document.createElement('button'); equipBtn.id = 'equipBtn'; equipBtn.textContent = 'Equip';
 				equipBtn.addEventListener('click', ()=>{
-					// toggle equip/unequip for axe if present in inventory
-					const axeIdx = inventory.findIndex(it=>it.id==='axe');
-					if(equippedItem && equippedItem.id === 'axe'){
-						equippedIndex = null; equippedItem = null; equipBtn.textContent = 'Equip';
-					} else if(axeIdx >= 0){ equippedIndex = axeIdx; equippedItem = inventory[axeIdx]; equipBtn.textContent = 'Equipped: ' + (equippedItem.name||'axe'); }
+					// equip the currently selected inventory item into the selected slot
+					const sel = window._selectedInventoryIndex;
+					if(typeof sel === 'number' && inventory[sel]){
+						equippedSlots[selectedSlot] = sel;
+						showPickup('Equipped ' + inventory[sel].name + ' to slot ' + slotKeys[selectedSlot].toUpperCase());
+					} else {
+						// if nothing selected in inventory, toggle unequip for this slot
+						if(equippedSlots[selectedSlot] != null){ equippedSlots[selectedSlot] = null; showPickup('Unequipped slot ' + slotKeys[selectedSlot].toUpperCase()); }
+						else { showPickup('Select an inventory item to equip'); }
+					}
 					updateEquipDisplay();
 				});
 				tb.appendChild(equipBtn);
@@ -528,8 +568,11 @@
 		function updateEquipDisplay(){
 			const btn = document.getElementById('equipBtn');
 			if(!btn) return;
-			if(equippedItem){ btn.textContent = 'Equipped: ' + (equippedItem.name || equippedItem.id); }
-			else { btn.textContent = 'Equip'; }
+			const slotKey = slotKeys[selectedSlot] ? slotKeys[selectedSlot].toUpperCase() : String(selectedSlot);
+			const eqIdx = equippedSlots[selectedSlot];
+			let name = 'Empty';
+			if(eqIdx != null && inventory[eqIdx]) name = inventory[eqIdx].name || inventory[eqIdx].id;
+			btn.textContent = `Slot ${slotKey}: ${name}`;
 		}
 
 		let selectedId = null;
@@ -1002,18 +1045,32 @@
 					// slot keys (z/x/c/v/b/n/m) select equip slots and can trigger quick actions
 					if(slotKeys.indexOf(k) >= 0){
 						const s = slotKeys.indexOf(k);
-						equippedIndex = s;
-						equippedItem = inventory[equippedIndex] || null;
+						selectedSlot = s;
 						updateEquipDisplay();
 					}
 					// quick cut with axe on 'z'
 					if(k === 'z'){
 						const centerObj = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
 						const axeInInventory = inventory.find(it=>it.id==='axe');
-						if((equippedItem && equippedItem.id === 'axe') || axeInInventory){
-							Axe.useOn(centerObj);
-							return;
+						// check equipped in selected slot
+						const eqIdx = equippedSlots[selectedSlot];
+						const hasEquippedAxe = (eqIdx != null && inventory[eqIdx] && inventory[eqIdx].id === 'axe');
+						if(hasEquippedAxe || axeInInventory){ Axe.useOn(centerObj); return; }
+					}
+
+					// bracket navigation: previous/next equipped slot
+					if(k === '[' || k === ']'){
+						const dir = (k === ']') ? 1 : -1;
+						let idx = selectedSlot;
+						for(let i=1;i<=slotKeys.length;i++){
+							const s = (idx + dir * i + slotKeys.length) % slotKeys.length;
+							if(equippedSlots[s] != null){ selectedSlot = s; updateEquipDisplay(); break; }
 						}
+					}
+
+					// pipe/backslash to unequip selected slot
+					if(k === '|' || k === '\\'){
+						if(equippedSlots[selectedSlot] != null){ equippedSlots[selectedSlot] = null; updateEquipDisplay(); showPickup('Unequipped slot ' + slotKeys[selectedSlot].toUpperCase()); }
 					}
 					if(k === 'q'){
 					const obj = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
