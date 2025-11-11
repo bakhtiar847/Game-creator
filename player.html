@@ -263,7 +263,7 @@
 			// spawn a tree at x,z in given world
 			static spawn(x,z, world=0){
 				const id = Date.now() + Math.floor(Math.random()*1000);
-				const t = new WorldObject({ id, name: 'Tree', x:x, y:0, z:z, color:'#8B5A2B', actions:[{key:'x',name:'cut'}], world });
+				const t = new WorldObject({ id, name: 'Tree', x:x, y:0, z:z, color:'#8B5A2B', actions:[{key:'q',name:'cut'}], world });
 				// trunk mesh + canopy tets
 				buildCylinderMesh(t, 6, 40, 18);
 				// add simple canopy tetrahedrons above trunk
