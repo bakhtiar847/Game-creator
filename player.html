@@ -1110,6 +1110,10 @@
 				return;
 			}
 			keysDown.add(k);
+			// if player is in a vehicle and they press 'o' toggle reverse gear
+			if(k === 'o'){
+				if(player && player._inVehicle){ const car = objects.find(o=>o.id===player._inVehicle); if(car){ car._reverse = !car._reverse; showPickup('Reverse ' + (car._reverse ? 'ON' : 'OFF')); } }
+			}
 			// inventory toggle (quick key)
 			if(k === 'e'){
 				inventoryOpen = !inventoryOpen;
