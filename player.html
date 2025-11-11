@@ -489,6 +489,15 @@
 				super(data);
 				this.opened = !!this.opened;
 				this.collected = !!this.collected;
+				// initial contents: accept array of [id,qty] tuples or array of objects
+				this.contents = [];
+				if(data && data.contents){
+					for(const it of data.contents){
+						if(Array.isArray(it)){
+							const [id,qty] = it; this.contents.push({ id:id, qty: Number(qty) || 0 });
+						} else if(it && it.id){ this.contents.push({ id: it.id, qty: Number(it.qty) || 0 }); }
+					}
+				}
 				this._buildChestMesh();
 				this.actions = this.actions || [];
 				this.actions.push({ key:'q', name:'open' });
@@ -577,7 +586,12 @@
 				if(!this.opened){
 					this.opened = true; this.lidTarget = -Math.PI * 0.65;
 					if(!this.collected){ this.collected = true; const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new InventoryItem('gold','Gold',1)); showPickup('Picked up Gold'); saveState(); }
-				} else { this.opened = false; this.lidTarget = 0; }
+				} else {
+					// closing the chest — offer to put items into it
+					this.opened = false; this.lidTarget = 0;
+					// defer UI so lid animation plays a bit
+					setTimeout(()=>{ showChestDepositDialog(this); }, 200);
+				}
 			}
 			update(dt){
 				if(this._lidTemplate){ const speed = 4.0; const delta = this.lidTarget - (this.lidAngle || 0); const maxStep = speed * dt; let step = Math.max(-maxStep, Math.min(maxStep, delta)); this.lidAngle = (this.lidAngle || 0) + step; }
