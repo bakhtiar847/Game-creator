@@ -43,75 +43,129 @@
 		objects = objects.map(o=> new GameObject(o));
 		for(const o of objects) if(typeof o.world === 'undefined') o.world = 0;
 
-		class WorldObject extends GameObject { constructor(data){ super(data); this.world = (data && data.world) || 0; } }
-			this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
-			this.isworld = true; this.iswall = true;
-		}
+		<!-- pause menu -->
+		<div id="pauseMenu" style="display:none; position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(2,6,23,0.9);color:#e6eef6;padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);z-index:40;min-width:260px;text-align:center">
+			<h3 style="margin:0 0 8px 0">Paused</h3>
+			<div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px">
+				<button id="pauseInventoryBtn">Inventory</button>
+				<button id="resumeBtn">Resume</button>
+				<button id="saveBtn">Save</button>
+			</div>
+			<div id="pauseInfo" class="muted">Press Esc to resume.</div>
+		</div>
 
-		enter(){
-			if(this.driver) return; // already occupied
-			this.driver = { id: 'player' };
-			player._inVehicle = this;
-			// snap player to car
-			player.x = this.x; player.y = this.y + 8; player.z = this.z;
-			player.vel = { x:0, y:0, z:0 };
-			player.onGround = false;
-			showPickup('Entered car');
-		}
+		<!-- inventory panel (used by pause menu) -->
+		<div id="inventoryPanel" style="display:none; position:fixed;right:18px;top:80px;background:rgba(2,6,23,0.9);color:#e6eef6;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);z-index:45;min-width:220px">
+			<h4 style="margin:0 0 8px 0">Inventory</h4>
+			<div id="inventoryList" style="max-height:300px;overflow:auto"></div>
+			<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+				<button id="putDownBtn">Put Down</button>
+				<button id="closeInventoryBtn">Close</button>
+			</div>
+		</div>
 
-		exit(){
-			if(!this.driver) return;
-			this.driver = null;
-			player._inVehicle = null;
-			// place player behind car
-			const rot = this.rotY || 0;
-			const backX = this.x - Math.sin(rot) * (this.dim.d/2 + player.radius + 6);
-			const backZ = this.z - Math.cos(rot) * (this.dim.d/2 + player.radius + 6);
-			player.x = backX; player.z = backZ; player.y = Math.max(0, this.y + 4);
-			showPickup('Exited car');
-		}
+		<footer>
+			This demo renders an objects array and shows an overlay with details. Open this file in a browser to interact.
+		</footer>
+	</div>
 
-		toggleReverse(){ this.reverse = !this.reverse; }
+	<script>
+		// Objects now have richer structure:
+		// { id, name, x,y,z (origin), triangles: [{p1:{x,y,z}, p2, p3}], tetrahedrons: [{a,b,c,d}], actions: [{key,name}], flags: isplayer,isworld,iswall }
 
-		update(dt){
-			// update physics when occupied
-			if(this.driver){
-				// steering
-				if(keysDown.has('j')){ this.rotY = (this.rotY||0) - this.turnSpeed * dt; }
-				if(keysDown.has('l')){ this.rotY = (this.rotY||0) + this.turnSpeed * dt; }
-				// throttle/brake
-				if(keysDown.has('i')){ // accelerate
-					const dir = this.reverse ? -1 : 1;
-					this.speed += this.accel * dt * dir;
-				} else if(keysDown.has('k')){ // brake
-					if(this.speed > 0) this.speed = Math.max(0, this.speed - this.brake * dt);
-					else this.speed = Math.min(0, this.speed + this.brake * dt);
-				} else {
-					// natural friction
-					this.speed *= Math.max(0, 1 - 2.0 * dt);
-				}
-				// clamp
-				this.speed = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.speed));
-				// update position based on heading
-				const forward = Math.sin(this.rotY || 0);
-				const forwardZ = Math.cos(this.rotY || 0);
-				this.x += forward * this.speed * dt;
-				this.z += forwardZ * this.speed * dt;
-				// keep player glued to car
-				player.x = this.x; player.z = this.z; player.y = this.y + 8; player.rotY = this.rotY || 0;
-				// update collision tetrahedrons to follow car position
-				const hw = this.dim.w/2, hy = this.dim.h/2, hd = this.dim.d/2;
-				const x = this.x, y = this.y + hy, z = this.z;
-				
-				const l = new Ladder({ id, name:'Ladder', x:x, y:y, z:z, color:'#c68642', world, isworld:true, iswall:true });
-				// simple thin tetrahedron to represent ladder
-				l.tetrahedrons = [ { a:{x:x-6,y:y,z:z-6}, b:{x:x+6,y:y,z:z-6}, c:{x:x+6,y:y+80,z:z+6}, d:{x:x-6,y:y+80,z:z+6} } ];
-				objects.push(l); return l;
+		// Lightweight classes for game objects and inventory items
+		class GameObject {
+			constructor(data){
+				Object.assign(this, data);
+				this.triangles = this.triangles || [];
+				this.tetrahedrons = this.tetrahedrons || [];
+				this.actions = this.actions || [];
+				this.isplayer = !!this.isplayer;
+				this.isworld = !!this.isworld;
+				this.iswall = !!this.iswall;
+				// runtime/visual fields
+				this.texture = this.texture || null;
+				this._baseTris = this._baseTris || null;
+				this._lidTemplate = this._lidTemplate || null;
+				this._chestDims = this._chestDims || null;
+				this.opened = !!this.opened;
+				this.lidAngle = this.lidAngle || 0;
+				this.lidTarget = this.lidTarget || 0;
 			}
 		}
 
-				this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
-				this.isworld = true; this.iswall = true;
+		class InventoryItem {
+			constructor(id, name, qty = 1){ this.id = id; this.name = name; this.qty = qty; }
+		}
+
+		let objects = [
+			{
+				id:1,
+				name:'Player',
+				x:300,y:100,z:200,
+				triangles:[],
+				tetrahedrons:[],
+				actions:[],
+				isplayer:true
+			}
+		];
+
+		// Texture loader: attach an Image to object.texture when textureSrc is present
+		function loadTexture(obj, src){
+			const img = new Image();
+			img.crossOrigin = 'anonymous';
+			img.onload = ()=>{ obj.texture = img; renderer && renderer.render(); };
+			img.onerror = ()=>{ console.warn('Failed to load texture', src); };
+			img.src = src;
+			return img;
+		}
+
+		// auto-load textures only when explicitly requested via textureSrc or isSprite flag
+		for(const o of objects){ if(o.textureSrc) loadTexture(o, o.textureSrc); }
+
+		// (Chest mesh builder moved into Chest class below)
+
+		// Convert plain object literals to GameObject instances
+		objects = objects.map(o => new GameObject(o));
+		// ensure each object has a world coordinate (default world 0)
+		for(const o of objects) if(typeof o.world === 'undefined') o.world = 0;
+
+		// WorldObject base class (derives from GameObject)
+		class WorldObject extends GameObject {
+			constructor(data){
+				super(data);
+				this.world = (data && data.world) || 0;
+			}
+		}
+
+		// abstract-ish Tree1 class derived from WorldObject
+		class Tree1 extends WorldObject {
+			constructor(data){ super(data); }
+			// spawn a tree at x,z in given world
+			static spawn(x,z, world=0){
+				const id = Date.now() + Math.floor(Math.random()*1000);
+				const t = new WorldObject({ id, name: 'Tree', x:x, y:0, z:z, color:'#8B5A2B', actions:[{key:'q',name:'cut'}], world });
+				// trunk mesh + canopy tets
+				buildCylinderMesh(t, 6, 40, 18);
+				// add simple canopy tetrahedrons above trunk
+				t.tetrahedrons = [
+					{a:{x:x-20,y:40,z:z-20},b:{x:x+20,y:40,z:z-20},c:{x:x,y:80,z:z},d:{x:x,y:55,z:z-40}},
+					{a:{x:x-20,y:45,z:z+20},b:{x:x+20,y:45,z:z+20},c:{x:x,y:85,z:z},d:{x:x,y:60,z:z+40}}
+				];
+				objects.push(t);
+				return t;
+			}
+		}
+
+		// Ladder class
+		class Ladder extends WorldObject {
+			constructor(data){
+				super(data);
+				this.actions = this.actions || [];
+				// allow both Q (default interact) and C to climb
+				this.actions.push({key:'c', name:'climb'});
+				this.actions.push({key:'q', name:'climb'});
+				this.climbHeight = data && typeof data.climbHeight !== 'undefined' ? data.climbHeight : 60;
 			}
 
 
@@ -464,48 +518,14 @@
 				for(let i=0;i<segments;i++){
 					const tNorm = i/(segments-1);
 					const x = -hw + tNorm * w;
-					const arc = Math.sin(Math.PI * tNorm) * 12; // lid bulge (reduced)
-					// build lid with thickness: top and bottom verts for each side (back/front)
-					const lidTopY = h + arc + 4; // top surface y
-					const lidBotY = h + arc - 4; // bottom surface y (thickness = 8)
-					// back/top, front/top, back/bot, front/bot
-					lid.verts.push({x:x,y:lidTopY,z:-hd}); // a: top back
-					lid.verts.push({x:x,y:lidTopY,z:hd});  // b: top front
-					lid.verts.push({x:x,y:lidBotY,z:-hd}); // c: bot back
-					lid.verts.push({x:x,y:lidBotY,z:hd});  // d: bot front
+					const arc = Math.sin(Math.PI * tNorm) * 20; // lid bulge
+					lid.verts.push({x:x,y:h+arc,z:-hd}); // back
+					lid.verts.push({x:x,y:h+arc,z:hd});  // front
 				}
-				// create indices for top surface and bottom surface and side faces
 				for(let i=0;i<segments-1;i++){
-					const a = i*4, b = i*4+1, c = i*4+2, d = i*4+3; // current segment verts
-					const na = (i+1)*4, nb = (i+1)*4+1, nc = (i+1)*4+2, nd = (i+1)*4+3; // next segment verts
-					// top surface (a,b,nb) and (a,nb,na)
-					lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[nb]]);
-					lid.indices.push([lid.verts[a], lid.verts[nb], lid.verts[na]]);
-					// bottom surface (c,nc,nd) and (c,nd,d) (note winding for correct normal)
-					lid.indices.push([lid.verts[c], lid.verts[nc], lid.verts[nd]]);
-					lid.indices.push([lid.verts[c], lid.verts[nd], lid.verts[d]]);
-					// side faces connecting top and bottom at back edge
-					lid.indices.push([lid.verts[a], lid.verts[c], lid.verts[nc]]);
-					lid.indices.push([lid.verts[a], lid.verts[nc], lid.verts[na]]);
-					// side faces connecting top and bottom at front edge
-					lid.indices.push([lid.verts[b], lid.verts[nb], lid.verts[nd]]);
-					lid.indices.push([lid.verts[b], lid.verts[nd], lid.verts[d]]);
-				}
-				// add simple iron bars on top (3 bars across width) — small rectangular strips
-				const bars = 3;
-				for(let bi=0; bi<bars; bi++){
-					const tNorm = (bi+1)/(bars+1);
-					const bx = -hw + tNorm * w;
-					const by = h + 12 + 4; // slightly above lid top
-					const bz = -hd + 4; const bz2 = hd - 4;
-					// four verts for bar (two ends, top surface)
-					const v0 = {x:bx-6,y:by,z:bz}; const v1 = {x:bx+6,y:by,z:bz};
-					const v2 = {x:bx-6,y:by,z:bz2}; const v3 = {x:bx+6,y:by,z:bz2};
-					const idxBase = lid.verts.length;
-					lid.verts.push(v0,v1,v2,v3);
-					// two triangles forming the bar top
-					lid.indices.push([lid.verts[idxBase], lid.verts[idxBase+1], lid.verts[idxBase+3]]);
-					lid.indices.push([lid.verts[idxBase], lid.verts[idxBase+3], lid.verts[idxBase+2]]);
+					const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
+					lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[d]]);
+					lid.indices.push([lid.verts[a], lid.verts[d], lid.verts[c]]);
 				}
 
 				obj._baseTris = tris;
@@ -648,9 +668,6 @@
 
 		// place an axe in the world for pickup
 		AxeWorld.spawn(320,0,460,0);
-
-		// spawn a test car
-		Car.spawn(420,0,680,0);
 
 		// ensure objects array is available to renderer (it will filter by world)
 
@@ -1215,14 +1232,6 @@
 						if(hasEquippedAxe || axeInInventory){ Axe.useOn(centerObj); return; }
 					}
 
-					// toggle reverse when in vehicle
-					if(k === 'o'){
-						if(player._inVehicle && typeof player._inVehicle.toggleReverse === 'function'){
-							player._inVehicle.toggleReverse();
-							showPickup('Reverse ' + (player._inVehicle.reverse ? 'ON' : 'OFF'));
-						}
-					}
-
 					// bracket navigation: previous/next equipped slot
 					if(k === '[' || k === ']'){
 						const dir = (k === ']') ? 1 : -1;
@@ -1321,24 +1330,10 @@
 			// gravity (positive Y is up). Use negative gravity to pull downwards.
 			const GRAV = -900; // units/s^2 (acceleration)
 			player.vel.y += GRAV * dt; // velocity affected by gravity
-			// integrate Y with basic collision resolution to avoid falling through walls
-			const prevY = player.y;
 			player.y += player.vel.y * dt; // integrate
-			// if player's sphere intersects a wall at the new Y, try to resolve upward (standing on top)
-			if(isBlockedByWorld({ x: player.x, y: player.y, z: player.z })){
-				// attempt to nudge player up until no collision (search up to 120 units)
-				let found = false;
-				for(let off = 0; off <= 120; off += 2){
-					if(!isBlockedByWorld({ x: player.x, y: prevY + off, z: player.z })){ player.y = prevY + off; player.vel.y = 0; player.onGround = true; found = true; break; }
-				}
-				if(!found){ // cannot resolve — rollback to previous Y and stop vertical motion
-					player.y = prevY; player.vel.y = 0; player.onGround = true;
-				}
-			} else {
-				// ground at y = 0 (player cannot go below 0)
-				if(player.y <= 0){ player.y = 0; player.vel.y = 0; player.onGround = true; }
-				else{ player.onGround = false; }
-			}
+			// ground at y = 0 (player cannot go below 0)
+			if(player.y <= 0){ player.y = 0; player.vel.y = 0; player.onGround = true; }
+			else{ player.onGround = false; }
 
 			// jump (space): give an upward positive impulse
 			if(keysDown.has(' ' ) || keysDown.has('space') ){
