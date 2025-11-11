@@ -458,6 +458,13 @@
 						const ai = i*4+2, bi = i*4+3, ci = (i+1)*4+2, di = (i+1)*4+3;
 						lid.indices.push([lid.verts[ci], lid.verts[di], lid.verts[bi]]);
 						lid.indices.push([lid.verts[ci], lid.verts[bi], lid.verts[ai]]);
+
+						// vertical side faces along front edge (connect outer front to inner front)
+						lid.indices.push([lid.verts[b], lid.verts[d], lid.verts[di]]);
+						lid.indices.push([lid.verts[b], lid.verts[di], lid.verts[bi]]);
+						// vertical side faces along back edge (connect outer back to inner back)
+						lid.indices.push([lid.verts[a], lid.verts[c], lid.verts[ci]]);
+						lid.indices.push([lid.verts[a], lid.verts[ci], lid.verts[ai]]);
 					}
 
 					// small side faces to close the lid ends (first and last segment)
@@ -852,8 +859,8 @@
 						// lid: rotate verts around hinge (back top edge)
 						if(obj._lidTemplate){
 							const lid = obj._lidTemplate; const dims = obj._chestDims;
-							// hinge along the back/top edge: use back side (hd sign may vary) — use positive hd so lid opens on the expected axis
-							const hingeY = dims.h; const hingeZ = dims.hd; // local hinge (back edge)
+							// hinge along the back/top edge: use back side (-hd) so lid rotates along the long edge
+							const hingeY = dims.h; const hingeZ = -dims.hd; // local hinge (back edge)
 							const angle = obj.lidAngle || 0;
 							// precompute rotated verts
 							const rotated = [];
