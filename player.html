@@ -397,12 +397,69 @@
 			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const c = new Chest({id,name:'Chest',x,y,z,color:'#8B5A2B',world}); objects.push(c); return c; }
 		}
 
+		// Inventory-specific item classes
+		class GoldItem extends InventoryItem { constructor(qty=1){ super('gold','Gold',qty); } }
+		class WoodItem extends InventoryItem { constructor(qty=1){ super('wood','Wood',qty); } }
+		class AxeItem extends InventoryItem { constructor(qty=1){ super('axe','Axe',qty); this.equipable = true; } }
+
+		// World representations for inventory items
+		class GoldWorld extends WorldObject {
+			constructor(data){ super(data); this.actions = this.actions || []; this.actions.push({ key:'q', name:'pickup' }); }
+			open(){ const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new GoldItem(1)); showPickup('Picked up Gold'); saveState(); // remove world object
+				const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh(); }
+			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const g = new GoldWorld({ id, name:'Gold', x,y,z, color:'#ffd700', world, isworld:false, iswall:false }); g.tetrahedrons = [ { a:{x:x-6,y:0,z:z-6}, b:{x:x+6,y:0,z:z-6}, c:{x:x+6,y:12,z:z+6}, d:{x:x-6,y:12,z:z+6} } ]; objects.push(g); return g; }
+		}
+
+		class WoodWorld extends WorldObject {
+			constructor(data){ super(data); this.actions = this.actions || []; this.actions.push({ key:'q', name:'pickup' }); }
+			open(){ const existing = inventory.find(it=>it.id==='wood'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new WoodItem(1)); showPickup('Picked up Wood'); saveState(); const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh(); }
+			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const w = new WoodWorld({ id, name:'Wood', x,y,z, color:'#8B5A2B', world, isworld:false, iswall:false }); w.tetrahedrons=[{a:{x:x-6,y:0,z:z-6},b:{x:x+6,y:0,z:z-6},c:{x:x+6,y:12,z:z+6},d:{x:x-6,y:12,z:z+6}}]; objects.push(w); return w; }
+		}
+
+		class AxeWorld extends WorldObject {
+			constructor(data){ super(data); this.actions = this.actions || []; this.actions.push({ key:'q', name:'pickup' }); }
+			open(){ const existing = inventory.find(it=>it.id==='axe'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new AxeItem(1)); showPickup('Picked up Axe'); saveState(); const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh(); }
+			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const a = new AxeWorld({ id, name:'Axe', x,y,z, color:'#c68642', world, isworld:false, iswall:false }); a.tetrahedrons=[{a:{x:x-6,y:0,z:z-6},b:{x:x+6,y:0,z:z-6},c:{x:x+6,y:20,z:z+6},d:{x:x-6,y:20,z:z+6}}]; objects.push(a); return a; }
+		}
+
+		// Axe tool logic (encapsulates cutting)
+		class Axe {
+			static useOn(target){
+				if(!target) return;
+				if(target.name && target.name.toLowerCase().includes('tree')){
+					// give wood and remove tree
+					const existing = inventory.find(it=>it.id === 'wood');
+					if(existing) existing.qty = (existing.qty||0) + 1; else inventory.push(new WoodItem(1));
+					// remove trunk and nearby canopy as before
+					const idx = objects.findIndex(o=>o.id === target.id);
+					if(idx>=0){
+						const trunkObj = objects[idx];
+						objects.splice(idx,1);
+						for(let i=objects.length-1;i>=0;i--){
+							const o = objects[i];
+							if(o.name && o.name.toLowerCase().includes('canopy')){
+								const dx = (o.x||0)-(trunkObj.x||0);
+								const dz = (o.z||0)-(trunkObj.z||0);
+								if(Math.hypot(dx,dz) < 120) objects.splice(i,1);
+							}
+						}
+						showPickup('Cut down tree — got Wood');
+						saveState();
+						refresh();
+					}
+				}
+			}
+		}
+
 		// convert any existing chest-like objects into Chest instances (remove originals)
 		for(let i=objects.length-1;i>=0;i--){ const o=objects[i]; if(o.name && o.name.toLowerCase()==='chest'){ objects.splice(i,1); Chest.spawn(o.x,o.y,o.z,o.world); } }
 
 		// spawn a couple more chests
 		Chest.spawn(340,0,480,0);
 		Chest.spawn(480,0,520,0);
+
+		// place an axe in the world for pickup
+		AxeWorld.spawn(320,0,460,0);
 
 		// ensure objects array is available to renderer (it will filter by world)
 
@@ -424,6 +481,10 @@
 		// inventory system
 		let inventoryOpen = false; // toggles inventory panel
 		let inventory = []; // array of items: {id,name,qty}
+		// equipped slot/selection via z,x,c,v,b,n,m keys
+		let equippedIndex = null;
+		let equippedItem = null;
+		const slotKeys = ['z','x','c','v','b','n','m'];
 
 		let paused = false;
 
@@ -445,6 +506,17 @@
 				const inv = document.createElement('button'); inv.id='toolbarInventoryBtn'; inv.textContent='Inventory';
 				inv.addEventListener('click', ()=>{ inventoryOpen = true; document.getElementById('inventoryPanel').style.display=''; renderInventory(); });
 				tb.appendChild(inv);
+				// equip button + display
+				const equipBtn = document.createElement('button'); equipBtn.id = 'equipBtn'; equipBtn.textContent = 'Equip';
+				equipBtn.addEventListener('click', ()=>{
+					// toggle equip/unequip for axe if present in inventory
+					const axeIdx = inventory.findIndex(it=>it.id==='axe');
+					if(equippedItem && equippedItem.id === 'axe'){
+						equippedIndex = null; equippedItem = null; equipBtn.textContent = 'Equip';
+					} else if(axeIdx >= 0){ equippedIndex = axeIdx; equippedItem = inventory[axeIdx]; equipBtn.textContent = 'Equipped: ' + (equippedItem.name||'axe'); }
+					updateEquipDisplay();
+				});
+				tb.appendChild(equipBtn);
 				// add / clear / center buttons moved to toolbar now that overlay is removed
 				const addB = document.createElement('button'); addB.id='addBtn'; addB.textContent='Add Obj'; addB.addEventListener('click', addRandomObject);
 				const clrB = document.createElement('button'); clrB.id='clearBtn'; clrB.textContent='Clear'; clrB.addEventListener('click', clearObjects);
@@ -452,6 +524,13 @@
 				tb.appendChild(addB); tb.appendChild(clrB); tb.appendChild(cenB);
 			}
 		})();
+
+		function updateEquipDisplay(){
+			const btn = document.getElementById('equipBtn');
+			if(!btn) return;
+			if(equippedItem){ btn.textContent = 'Equipped: ' + (equippedItem.name || equippedItem.id); }
+			else { btn.textContent = 'Equip'; }
+		}
 
 		let selectedId = null;
 
@@ -920,7 +999,23 @@
 				console.log('Inventory',inventoryOpen);
 			}
 			// interact: if chest is centered, open/close lid on 'q'
-				if(k === 'q'){
+					// slot keys (z/x/c/v/b/n/m) select equip slots and can trigger quick actions
+					if(slotKeys.indexOf(k) >= 0){
+						const s = slotKeys.indexOf(k);
+						equippedIndex = s;
+						equippedItem = inventory[equippedIndex] || null;
+						updateEquipDisplay();
+					}
+					// quick cut with axe on 'z'
+					if(k === 'z'){
+						const centerObj = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
+						const axeInInventory = inventory.find(it=>it.id==='axe');
+						if((equippedItem && equippedItem.id === 'axe') || axeInInventory){
+							Axe.useOn(centerObj);
+							return;
+						}
+					}
+					if(k === 'q'){
 					const obj = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
 					if(obj){
 						// prefer object method if available (Chest.open, Portal.enter)
@@ -969,8 +1064,8 @@
 			// camera rotation (arrow keys) — camera drives player orientation
 			if(keysDown.has('arrowleft')){ camera.rotY = (camera.rotY || 0) - 2.5 * dt; }
 			if(keysDown.has('arrowright')){ camera.rotY = (camera.rotY || 0) + 2.5 * dt; }
-			if(keysDown.has('arrowup')){ camera.rotX = Math.max(-1.2,(camera.rotX||0) - 2.5 * dt); }
-			if(keysDown.has('arrowdown')){ camera.rotX = Math.min(1.2,(camera.rotX||0) + 2.5 * dt); }
+			if(keysDown.has('arrowdown')){ camera.rotX = Math.max(-1.2,(camera.rotX||0) - 2.5 * dt); }
+			if(keysDown.has('arrowup')){ camera.rotX = Math.min(1.2,(camera.rotX||0) + 2.5 * dt); }
 			// sync player orientation to camera
 			player.rotY = camera.rotY || 0;
 			player.pitch = camera.rotX || 0;
@@ -1046,31 +1141,7 @@
 			if(!obj || !action) return;
 			const key = (action.key||'').toLowerCase();
 			const name = (action.name||'').toLowerCase();
-			if(name === 'cut' || key === 'x'){
-				// remove trunk and give wood
-				// find trunk object index
-				const idx = objects.findIndex(o=>o.id === obj.id);
-				if(idx >= 0){
-					// spawn a small wood pickup in inventory and remove object
-						const existing = inventory.find(it=>it.id === 'wood');
-						if(existing) existing.qty = (existing.qty||0) + 1;
-						else inventory.push(new InventoryItem('wood','Wood',1));
-					// also remove nearby canopy pieces (tree canopy)
-					const trunkObj = objects[idx];
-					objects.splice(idx,1);
-					for(let i = objects.length-1; i>=0; i--){
-						const o = objects[i];
-						if(o.name && o.name.toLowerCase().includes('canopy')){
-							const dx = (o.x||0) - (trunkObj.x||0); const dz = (o.z||0) - (trunkObj.z||0);
-							if(Math.hypot(dx,dz) < 120){ objects.splice(i,1); }
-						}
-					}
-					showPickup('Picked up Wood');
-					saveState();
-					refresh();
-				}
-				return;
-			}
+			// cutting is handled by the Axe tool (use the 'z' key when wielding an axe)
 
 			// climb action for Ladder — animate smoothly to nearest platform top
 			if(name === 'climb' || key === 'c'){
@@ -1259,13 +1330,21 @@
 			const it = inventory[idx];
 			// remove one from inventory
 			it.qty -= 1; if(it.qty <= 0) inventory.splice(idx,1);
-			// spawn a small dropped object in front of player
-			const id = Date.now();
+			// spawn a specific world object based on the inventory item type
 			const rot = player.rotY || 0; const fx = Math.sin(rot), fz = Math.cos(rot);
 			const ox = player.x + fx * 60; const oz = player.z + fz * 60; const oy = Math.max(0, player.y);
-			const color = it.id === 'gold' ? '#ffd700' : (it.id === 'wood' ? '#8B5A2B' : '#ccc');
-			const drop = { id, name: it.name, x:ox, y:oy, z:oz, triangles:[], tetrahedrons:[{a:{x:ox-6,y:oy,z:oz-6},b:{x:ox+6,y:oy,z:oz-6},c:{x:ox+6,y:oy+12,z:oz+6},d:{x:ox-6,y:oy+12,z:oz+6}}], actions:[], isworld:false, iswall:false, color };
-			objects.push(drop);
+			if(it.id === 'gold'){
+				GoldWorld.spawn(ox, oy, oz, player.world);
+			}else if(it.id === 'wood'){
+				WoodWorld.spawn(ox, oy, oz, player.world);
+			}else if(it.id === 'axe'){
+				AxeWorld.spawn(ox, oy, oz, player.world);
+			}else{
+				// generic drop fallback
+				const id = Date.now();
+				const drop = { id, name: it.name, x:ox, y:oy, z:oz, triangles:[], tetrahedrons:[{a:{x:ox-6,y:oy,z:oz-6},b:{x:ox+6,y:oy,z:oz-6},c:{x:ox+6,y:oy+12,z:oz+6},d:{x:ox-6,y:oy+12,z:oz+6}}], actions:[], isworld:false, iswall:false, color: '#ccc' };
+				objects.push(drop);
+			}
 			showPickup('Put down ' + it.name);
 			saveState(); renderInventory(); refresh();
 		});
