@@ -670,9 +670,9 @@
 		const canvas = document.getElementById('canvas');
 		const ctx = canvas.getContext('2d');
 
-		// driving controls overlay: shown initially until any key is pressed; toggled with 'p'
+		// driving controls overlay: hidden by default; shown when entering a car or toggled with 'p'
 		let driveOverlaySeen = false;
-		let driveOverlayVisible = true;
+		let driveOverlayVisible = false;
 		(function createDriveOverlay(){
 			const el = document.createElement('div'); el.id = 'driveOverlay';
 			el.style.position = 'fixed'; el.style.right = '18px'; el.style.bottom = '18px'; el.style.zIndex = 60;
@@ -681,8 +681,8 @@
 			el.style.maxWidth = '260px'; el.style.boxShadow = '0 6px 18px rgba(0,0,0,0.4)';
 			el.innerHTML = '<strong>Driving controls</strong><br>I: accelerate &nbsp; K: brake<br>J/L: steer &nbsp; O: toggle reverse<br>Q: enter / exit<br><small style="opacity:0.8">Press any key to dismiss. Press P to show.</small>';
 			document.body.appendChild(el);
-			// visible initially
-			driveOverlayVisible = true; el.style.display = driveOverlayVisible ? '' : 'none';
+			// hidden initially
+			driveOverlayVisible = false; el.style.display = 'none';
 		})();
 		// toolbar buttons will be created programmatically; selectedInfo is in header
 		const addBtn = null; // replaced after toolbar creation
