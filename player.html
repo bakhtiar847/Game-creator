@@ -1470,6 +1470,60 @@
 			});
 		}
 
+		// show a modal to deposit items from inventory into a chest
+		function showChestDepositDialog(chest){
+			if(!chest) return;
+			// create modal
+			let modal = document.getElementById('chestDepositModal');
+			if(modal) modal.remove();
+			modal = document.createElement('div'); modal.id = 'chestDepositModal';
+			modal.style.position = 'fixed'; modal.style.left = '50%'; modal.style.top = '50%'; modal.style.transform = 'translate(-50%,-50%)';
+			modal.style.background = 'rgba(2,6,23,0.95)'; modal.style.color = '#e6eef6'; modal.style.padding = '14px'; modal.style.borderRadius = '10px';
+			modal.style.border = '1px solid rgba(255,255,255,0.06)'; modal.style.zIndex = 200; modal.style.minWidth = '320px';
+			const title = document.createElement('div'); title.style.fontWeight='700'; title.style.marginBottom='8px'; title.textContent = 'Put items into chest'; modal.appendChild(title);
+			const info = document.createElement('div'); info.style.marginBottom='8px'; info.style.color='#94a3b8'; info.textContent = `Chest contents: ${chest.contents && chest.contents.length? chest.contents.map(c=>c.id+':'+c.qty).join(', '): 'empty'}`; modal.appendChild(info);
+			const list = document.createElement('div'); list.style.maxHeight='220px'; list.style.overflow='auto'; list.style.marginBottom='8px';
+			// for each inventory item, show a row with input number
+			inventory.forEach((it, idx)=>{
+				const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px 0';
+				const label = document.createElement('div'); label.textContent = `${it.name} (x${it.qty||1})`;
+				const ctrl = document.createElement('input'); ctrl.type='number'; ctrl.min='0'; ctrl.max=String(it.qty||0); ctrl.value='0'; ctrl.style.width='64px'; ctrl.dataset.idx = idx;
+				row.appendChild(label); row.appendChild(ctrl); list.appendChild(row);
+			});
+			modal.appendChild(list);
+			const btnRow = document.createElement('div'); btnRow.style.display='flex'; btnRow.style.justifyContent='flex-end'; btnRow.style.gap='8px';
+			const putBtn = document.createElement('button'); putBtn.textContent='Put selected';
+			const doneBtn = document.createElement('button'); doneBtn.textContent='Done';
+			btnRow.appendChild(putBtn); btnRow.appendChild(doneBtn); modal.appendChild(btnRow);
+			document.body.appendChild(modal);
+
+			putBtn.addEventListener('click', ()=>{
+				// iterate inputs and transfer amounts
+				const inputs = modal.querySelectorAll('input[type=number]');
+				let moved = 0;
+				inputs.forEach(inp=>{
+					const amt = Math.max(0, Math.floor(Number(inp.value)||0));
+					if(amt <= 0) return;
+					const invIdx = Number(inp.dataset.idx);
+					const item = inventory[invIdx];
+					if(!item) return;
+					const take = Math.min(amt, item.qty||0);
+					if(take <= 0) return;
+					// remove from inventory
+					item.qty = (item.qty||0) - take;
+					// add to chest.contents (merge)
+					const existing = chest.contents.find(c=>c.id === item.id);
+					if(existing) existing.qty += take; else chest.contents.push({ id: item.id, qty: take });
+					moved += take;
+				});
+				// cleanup zero-qty inventory entries
+				for(let i=inventory.length-1;i>=0;i--){ if(inventory[i].qty <= 0) inventory.splice(i,1); }
+				if(moved > 0){ showPickup(`Placed ${moved} item(s) into chest`); saveState(); refresh(); info.textContent = `Chest contents: ${chest.contents.map(c=>c.id+':'+c.qty).join(', ')}`; }
+			});
+
+			doneBtn.addEventListener('click', ()=>{ modal.remove(); });
+		}
+
 		// save/load state to cookies
 		function saveState(){
 			try{
