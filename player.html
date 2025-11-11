@@ -579,6 +579,8 @@
 						this._driver = null; showPickup('Exited car');
 					} else {
 						this._driver = player.id; player._inVehicle = this.id; player.vel.y = 0; player.onGround = true; showPickup('Entered car');
+						// show driving help overlay when entering
+						const _el = document.getElementById('driveOverlay'); if(_el){ _el.style.display = ''; driveOverlayVisible = true; }
 					}
 					saveState();
 				}
@@ -594,6 +596,29 @@
 					const a = {x:x-hx,y:y,z:z-hz}, b={x:x+hx,y:y,z:z-hz}, c={x:x-hx,y:y,z:z+hz}, d={x:x+hx,y:y,z:z+hz};
 					const e={x:x-hx,y:y+2*hy,z:z-hz}, f={x:x+hx,y:y+2*hy,z:z-hz}, g={x:x-hx,y:y+2*hy,z:z+hz}, h={x:x+hx,y:y+2*hy,z:z+hz};
 					car.tetrahedrons = [ {a:a,b:b,c:c,d:e}, {a:b,b:d,c:h,d:f}, {a:b,b:f,c:e,d:h}, {a:c,b:e,c:g,d:h}, {a:b,b:c,c:e,d:h} ];
+					// also create simple surface triangles for nicer flat-shaded rendering
+					const verts = [
+						{ x: x-hx, y: y, z: z-hz }, //0 a
+						{ x: x+hx, y: y, z: z-hz }, //1 b
+						{ x: x-hx, y: y, z: z+hz }, //2 c
+						{ x: x+hx, y: y, z: z+hz }, //3 d
+						{ x: x-hx, y: y+2*hy, z: z-hz }, //4 e
+						{ x: x+hx, y: y+2*hy, z: z-hz }, //5 f
+						{ x: x-hx, y: y+2*hy, z: z+hz }, //6 g
+						{ x: x+hx, y: y+2*hy, z: z+hz }  //7 h
+					];
+					car._baseTris = [
+						// bottom
+						[ verts[0], verts[1], verts[2] ], [ verts[1], verts[3], verts[2] ],
+						// top
+						[ verts[4], verts[6], verts[5] ], [ verts[5], verts[6], verts[7] ],
+						// front/back
+						[ verts[2], verts[3], verts[6] ], [ verts[3], verts[7], verts[6] ],
+						[ verts[0], verts[4], verts[1] ], [ verts[1], verts[4], verts[5] ],
+						// left/right
+						[ verts[0], verts[2], verts[4] ], [ verts[2], verts[6], verts[4] ],
+						[ verts[1], verts[5], verts[3] ], [ verts[3], verts[5], verts[7] ]
+					];
 					car.speedForward = 0; car._reverse = false;
 					objects.push(car);
 					return car;
@@ -644,6 +669,21 @@
 		const stage = document.getElementById('stage');
 		const canvas = document.getElementById('canvas');
 		const ctx = canvas.getContext('2d');
+
+		// driving controls overlay: shown initially until any key is pressed; toggled with 'p'
+		let driveOverlaySeen = false;
+		let driveOverlayVisible = true;
+		(function createDriveOverlay(){
+			const el = document.createElement('div'); el.id = 'driveOverlay';
+			el.style.position = 'fixed'; el.style.right = '18px'; el.style.bottom = '18px'; el.style.zIndex = 60;
+			el.style.background = 'rgba(8,12,20,0.85)'; el.style.color = '#e6eef6'; el.style.padding = '10px 14px';
+			el.style.borderRadius = '8px'; el.style.border = '1px solid rgba(255,255,255,0.06)'; el.style.font = '13px sans-serif';
+			el.style.maxWidth = '260px'; el.style.boxShadow = '0 6px 18px rgba(0,0,0,0.4)';
+			el.innerHTML = '<strong>Driving controls</strong><br>I: accelerate &nbsp; K: brake<br>J/L: steer &nbsp; O: toggle reverse<br>Q: enter / exit<br><small style="opacity:0.8">Press any key to dismiss. Press P to show.</small>';
+			document.body.appendChild(el);
+			// visible initially
+			driveOverlayVisible = true; el.style.display = driveOverlayVisible ? '' : 'none';
+		})();
 		// toolbar buttons will be created programmatically; selectedInfo is in header
 		const addBtn = null; // replaced after toolbar creation
 		const clearBtn = null;
@@ -1152,6 +1192,19 @@
 				return;
 			}
 			keysDown.add(k);
+			// dismiss driving overlay on first keypress (unless user pressed 'p' to toggle)
+			const _driveEl = document.getElementById('driveOverlay');
+			if(_driveEl && driveOverlayVisible && k !== 'p'){
+				_driveEl.style.display = 'none'; driveOverlayVisible = false; driveOverlaySeen = true;
+			}
+			// toggle driving overlay with 'p'
+			if(k === 'p'){
+				if(_driveEl){ driveOverlayVisible = !driveOverlayVisible; _driveEl.style.display = driveOverlayVisible ? '' : 'none'; }
+				return;
+			}
+
+			// if player is in a vehicle and they press 'q' while inside, exit immediately
+			if(k === 'q' && player && player._inVehicle){ const car = objects.find(o=>o.id===player._inVehicle); if(car){ car.open(); saveState(); return; } }
 			// if player is in a vehicle and they press 'o' toggle reverse gear
 			if(k === 'o'){
 				if(player && player._inVehicle){ const car = objects.find(o=>o.id===player._inVehicle); if(car){ car._reverse = !car._reverse; showPickup('Reverse ' + (car._reverse ? 'ON' : 'OFF')); } }
