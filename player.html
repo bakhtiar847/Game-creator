@@ -375,8 +375,20 @@
 				super(data);
 				this.actions = this.actions || [];
 				this.actions.push({ key:'q', name:'enter' });
+				// optional target: { x,y,z, world }
+				this.target = data && data.target ? data.target : null;
+				this.oneway = !!(data && data.oneway);
 			}
 			enter(){
+				if(this.target){
+					// teleport to explicit target
+					player.world = this.target.world;
+					player.x = this.target.x; player.y = this.target.y || 0; player.z = this.target.z;
+					showPickup('Teleported to world ' + player.world);
+					console.log('Portal teleport to', this.target);
+					return;
+				}
+				// fallback: toggle between worlds as before
 				const targetWorld = (player.world === 0) ? 1 : 0;
 				player.world = targetWorld;
 				if(targetWorld === 1){ player.x = 100; player.z = 100; player.y = 0; }
@@ -384,11 +396,31 @@
 				showPickup('Entered world ' + player.world);
 				console.log('Player moved to world', player.world);
 			}
-			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const p = new Portal({ id, name:'Portal', x,y,z,color:'#7c3aed',world}); p.tetrahedrons=[{a:{x:x-10,y:y,z:z-10},b:{x:x+10,y:y,z:z-10},c:{x:x+10,y:y+60,z:z+10},d:{x:x-10,y:y+60,z:z+10}}]; objects.push(p); return p; }
+			static spawn(x,y,z,world=0, opts = {}){
+				// opts: { target: {x,y,z,world}, oneway: bool }
+				const id = Date.now()+Math.floor(Math.random()*1000);
+				const data = Object.assign({ id, name:'Portal', x,y,z, color:'#7c3aed', world }, opts);
+				const p = new Portal(data);
+				p.tetrahedrons = [ { a:{x:x-10,y:y,z:z-10}, b:{x:x+10,y:y,z:z-10}, c:{x:x+10,y:y+60,z:z+10}, d:{x:x-10,y:y+60,z:z+10} } ];
+				objects.push(p);
+				// if a target is provided and portal is not one-way, create a return portal at target location
+				if(p.target && !p.oneway){
+					// create partner portal that points back to this one
+					const t = p.target;
+					const partnerId = Date.now()+Math.floor(Math.random()*1000);
+					const partnerData = { id: partnerId, name:'Portal', x: t.x, y: t.y||0, z: t.z, color:'#7c3aed', world: t.world, target: { x: p.x, y: p.y || 0, z: p.z, world: p.world }, oneway: false };
+					const partner = new Portal(partnerData);
+					partner.tetrahedrons = [ { a:{x:t.x-10,y:t.y||0,z:t.z-10}, b:{x:t.x+10,y:t.y||0,z:t.z-10}, c:{x:t.x+10,y:(t.y||0)+60,z:t.z+10}, d:{x:t.x-10,y:(t.y||0)+60,z:t.z+10} } ];
+					objects.push(partner);
+					// link them (optional convenience)
+					p._partnerId = partner.id; partner._partnerId = p.id;
+				}
+				return p;
+			}
 		}
 
-		// spawn a portal
-		Portal.spawn(600,0,520,0);
+		// spawn a portal (paired): this portal goes to world 1 at x:100,z:100
+		Portal.spawn(600,0,520,0, { target: { x:100, y:0, z:100, world:1 } });
 
 		// Chest class
 		class Chest extends WorldObject {
