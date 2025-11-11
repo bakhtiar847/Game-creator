@@ -215,6 +215,17 @@
 		}
 
 		// Ladder & Platform spawn
+		// Minimal Ladder class
+		class Ladder extends WorldObject {
+			constructor(data){
+				super(data);
+				this.actions = this.actions || [];
+				this.actions.push({ key:'q', name:'climb' });
+				this.climbHeight = data && data.climbHeight || (this.y + 120);
+				this.tetrahedrons = [ { a:{x:this.x-6,y:this.y,z:this.z-6}, b:{x:this.x+6,y:this.y,z:this.z-6}, c:{x:this.x+6,y:this.y+120,z:this.z+6}, d:{x:this.x-6,y:this.y+120,z:this.z+6} } ];
+			}
+			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const l = new Ladder({ id, name:'Ladder', x,y,z, color:'#f97316', world, isworld:true, iswall:false }); objects.push(l); return l; }
+		}
 		const ladder = Ladder.spawn(200, 0, 520, 0);
 		const platform = Platform.spawn(200, 80, 560, 0);
 		ladder.climbHeight = platform.y + 4;
