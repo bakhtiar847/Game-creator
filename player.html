@@ -1488,6 +1488,19 @@
 					</div>
 				`;
 				document.body.appendChild(panel);
+				// inject lightweight panel styles (only once)
+				if(!document.getElementById('chestPanelStyles')){
+					const s = document.createElement('style'); s.id = 'chestPanelStyles';
+					s.textContent = `
+					#chestPanel { box-shadow: 0 8px 24px rgba(2,6,23,0.6); }
+					#chestPanel button { background: linear-gradient(180deg,#0b1220,#081018); border:1px solid rgba(255,255,255,0.06); color:#e6eef6; padding:6px 8px; border-radius:6px; cursor:pointer }
+					#chestPanel button:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
+					#chestPanel input[type=number] { background:#07121a; border:1px solid rgba(255,255,255,0.04); color:#e6eef6; padding:4px 6px; border-radius:6px }
+					#chestPanel .muted { color:#94a3b8 }
+					#chestPanel div { font-size:14px }
+					`;
+					document.head.appendChild(s);
+				}
 				panel.querySelector('#chestCloseBtn').addEventListener('click', ()=>{ chest.open(); });
 			}
 			panel.style.display = '';
