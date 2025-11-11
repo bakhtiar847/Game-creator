@@ -128,61 +128,7 @@
 		// auto-load textures only when explicitly requested via textureSrc or isSprite flag
 		for(const o of objects){ if(o.textureSrc) loadTexture(o, o.textureSrc); }
 
-		// --- Chest mesh builder (rectangular prism + curved lid template) ---
-		function buildChestMesh(obj){
-			// dimensions
-			const w = 80, h = 40, d = 60; // width(x), height(y), depth(z)
-			const hw = w/2, hd = d/2;
-			// base corners (local coords)
-			const v = {
-				p000: {x:-hw,y:0,z:-hd}, p100:{x:hw,y:0,z:-hd}, p010:{x:-hw,y:h,z:-hd}, p110:{x:hw,y:h,z:-hd},
-				p001:{x:-hw,y:0,z:hd}, p101:{x:hw,y:0,z:hd}, p011:{x:-hw,y:h,z:hd}, p111:{x:hw,y:h,z:hd}
-			};
-			// base triangles (omit top face, lid will cover)
-			const tris = [];
-			function t(a,b,c){ tris.push([a,b,c]); }
-			// front face (z = hd)
-			t(v.p001,v.p101,v.p111); t(v.p001,v.p111,v.p011);
-			// back face (z = -hd)
-			t(v.p100,v.p000,v.p010); t(v.p100,v.p010,v.p110);
-			// left face (x = -hw)
-			t(v.p000,v.p001,v.p011); t(v.p000,v.p011,v.p010);
-			// right face (x = hw)
-			t(v.p101,v.p100,v.p110); t(v.p101,v.p110,v.p111);
-			// bottom face
-			t(v.p000,v.p100,v.p101); t(v.p000,v.p101,v.p001);
-
-			// lid template: approximate curved lid along width with segments
-			const segments = 9;
-			const lid = {verts:[], indices:[]};
-			for(let i=0;i<segments;i++){
-				const tNorm = i/(segments-1);
-				const x = -hw + tNorm * w;
-				// semicircular arc in local Y above top h
-				const arc = Math.sin(Math.PI * tNorm) * 20; // lid bulge
-				// back point (z = -hd) and front point (z = hd)
-				lid.verts.push({x:x,y:h+arc,z:-hd}); // back
-				lid.verts.push({x:x,y:h+arc,z:hd});  // front
-			}
-			// indices (quads between segments -> two tris)
-			for(let i=0;i<segments-1;i++){
-				const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
-				// two triangles: back(i)->front(i)->front(i+1) and back(i)->front(i+1)->back(i+1)
-				lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[d]]);
-				lid.indices.push([lid.verts[a], lid.verts[d], lid.verts[c]]);
-			}
-
-			obj._baseTris = tris; // array of [a,b,c] where a,b,c are vertex objects with local coords
-			obj._lidTemplate = lid; // contains verts (local) and indices (triples of vertex objects)
-			obj._chestDims = {w,h,d,hw,hd};
-			// state
-			obj.opened = obj.opened || false;
-			obj.lidAngle = obj.lidAngle || 0; // radians, 0 closed
-			obj.lidTarget = obj.lidTarget || 0; // target angle
-		}
-
-		// build chest mesh for existing chest objects
-		for(const o of objects){ if(o.name && o.name.toLowerCase() === 'chest') buildChestMesh(o); }
+		// (Chest mesh builder moved into Chest class below)
 
 		// Convert plain object literals to GameObject instances
 		objects = objects.map(o => new GameObject(o));
@@ -296,10 +242,31 @@
 		// Platform class
 		class Platform extends WorldObject {
 			constructor(data){ super(data); }
-			static spawn(x,y,z,world=0){
+			static spawn(x,y,z,world=0, opts = {}){
+				// opts: { sizeX=40, sizeZ=40, thickness=6 }
+				const sizeX = (opts.sizeX !== undefined) ? opts.sizeX : 40;
+				const sizeZ = (opts.sizeZ !== undefined) ? opts.sizeZ : 40;
+				const thickness = (opts.thickness !== undefined) ? opts.thickness : 6;
+				const hx = sizeX/2, hz = sizeZ/2, hy = thickness/2;
 				const id = Date.now() + Math.floor(Math.random()*1000);
 				const p = new Platform({ id, name:'Platform', x:x,y:y,z:z, color:'#64748b', world: world, isworld:true, iswall:true });
-				p.tetrahedrons = [ { a:{x:x-20,y:y-2,z:z-20}, b:{x:x+20,y:y-2,z:z-20}, c:{x:x+20,y:y+2,z:z+20}, d:{x:x-20,y:y+2,z:z+20} } ];
+				// build box corners (v0..v7)
+				const v0 = {x:x-hx, y:y-hy, z:z-hz};
+				const v1 = {x:x+hx, y:y-hy, z:z-hz};
+				const v2 = {x:x-hx, y:y-hy, z:z+hz};
+				const v3 = {x:x+hx, y:y-hy, z:z+hz};
+				const v4 = {x:x-hx, y:y+hy, z:z-hz};
+				const v5 = {x:x+hx, y:y+hy, z:z-hz};
+				const v6 = {x:x-hx, y:y+hy, z:z+hz};
+				const v7 = {x:x+hx, y:y+hy, z:z+hz};
+				// decompose box into 5 tetrahedrons
+				p.tetrahedrons = [
+					{a:v0,b:v1,c:v2,d:v4},
+					{a:v1,b:v2,c:v3,d:v7},
+					{a:v1,b:v4,c:v5,d:v7},
+					{a:v2,b:v4,c:v6,d:v7},
+					{a:v1,b:v2,c:v4,d:v7}
+				];
 				objects.push(p); return p;
 			}
 		}
@@ -368,9 +335,55 @@
 				super(data);
 				this.opened = !!this.opened;
 				this.collected = !!this.collected;
-				buildChestMesh(this);
+				this._buildChestMesh();
 				this.actions = this.actions || [];
 				this.actions.push({ key:'q', name:'open' });
+			}
+
+			// build chest mesh (base + segmented curved lid) — local to Chest class
+			_buildChestMesh(){
+				const obj = this;
+				const w = 80, h = 40, d = 60; // width(x), height(y), depth(z)
+				const hw = w/2, hd = d/2;
+				const v = {
+					p000: {x:-hw,y:0,z:-hd}, p100:{x:hw,y:0,z:-hd}, p010:{x:-hw,y:h,z:-hd}, p110:{x:hw,y:h,z:-hd},
+					p001:{x:-hw,y:0,z:hd}, p101:{x:hw,y:0,z:hd}, p011:{x:-hw,y:h,z:hd}, p111:{x:hw,y:h,z:hd}
+				};
+				const tris = [];
+				function t(a,b,c){ tris.push([a,b,c]); }
+				// front face (z = hd)
+				t(v.p001,v.p101,v.p111); t(v.p001,v.p111,v.p011);
+				// back face (z = -hd)
+				t(v.p100,v.p000,v.p010); t(v.p100,v.p010,v.p110);
+				// left face (x = -hw)
+				t(v.p000,v.p001,v.p011); t(v.p000,v.p011,v.p010);
+				// right face (x = hw)
+				t(v.p101,v.p100,v.p110); t(v.p101,v.p110,v.p111);
+				// bottom face
+				t(v.p000,v.p100,v.p101); t(v.p000,v.p101,v.p001);
+
+				// lid template: approximate curved lid along width with segments
+				const segments = 9;
+				const lid = { verts: [], indices: [] };
+				for(let i=0;i<segments;i++){
+					const tNorm = i/(segments-1);
+					const x = -hw + tNorm * w;
+					const arc = Math.sin(Math.PI * tNorm) * 20; // lid bulge
+					lid.verts.push({x:x,y:h+arc,z:-hd}); // back
+					lid.verts.push({x:x,y:h+arc,z:hd});  // front
+				}
+				for(let i=0;i<segments-1;i++){
+					const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
+					lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[d]]);
+					lid.indices.push([lid.verts[a], lid.verts[d], lid.verts[c]]);
+				}
+
+				obj._baseTris = tris;
+				obj._lidTemplate = lid;
+				obj._chestDims = {w,h,d,hw,hd};
+				obj.opened = obj.opened || false;
+				obj.lidAngle = obj.lidAngle || 0;
+				obj.lidTarget = obj.lidTarget || 0;
 			}
 			open(){
 				if(!this.opened){
