@@ -577,6 +577,8 @@
 						const p = objects.find(o=>o.id === this._driver);
 						if(p){ p._inVehicle = null; const offset = (this._dims.hz || 18) + (p.radius||28) + 6; p.x = this.x - Math.sin(this.rotY) * offset; p.z = this.z - Math.cos(this.rotY) * offset; p.y = this.y; }
 						this._driver = null; showPickup('Exited car');
+						// hide driving overlay when exiting
+						const __el = document.getElementById('driveOverlay'); if(__el){ __el.style.display = 'none'; driveOverlayVisible = false; driveOverlaySeen = true; }
 					} else {
 						this._driver = player.id; player._inVehicle = this.id; player.vel.y = 0; player.onGround = true; showPickup('Entered car');
 						// show driving help overlay when entering
@@ -1194,9 +1196,6 @@
 			keysDown.add(k);
 			// dismiss driving overlay on first keypress (unless user pressed 'p' to toggle)
 			const _driveEl = document.getElementById('driveOverlay');
-			if(_driveEl && driveOverlayVisible && k !== 'p'){
-				_driveEl.style.display = 'none'; driveOverlayVisible = false; driveOverlaySeen = true;
-			}
 			// toggle driving overlay with 'p'
 			if(k === 'p'){
 				if(_driveEl){ driveOverlayVisible = !driveOverlayVisible; _driveEl.style.display = driveOverlayVisible ? '' : 'none'; }
