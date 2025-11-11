@@ -397,73 +397,115 @@
 				objects.push(door); return door;
 			}
 		}
-			// Chest class
-		class Chest extends WorldObject {
-			constructor(data){
-				super(data);
-				this.opened = !!this.opened;
-				this.collected = !!this.collected;
-				this._buildChestMesh();
-				this.actions = this.actions || [];
-				this.actions.push({ key:'q', name:'open' });
-			}
-
-			// build chest mesh (base + segmented curved lid) — local to Chest class
-			_buildChestMesh(){
-				const obj = this;
-				const w = 80, h = 40, d = 60; // width(x), height(y), depth(z)
-				const hw = w/2, hd = d/2;
-				const v = {
-					p000: {x:-hw,y:0,z:-hd}, p100:{x:hw,y:0,z:-hd}, p010:{x:-hw,y:h,z:-hd}, p110:{x:hw,y:h,z:-hd},
-					p001:{x:-hw,y:0,z:hd}, p101:{x:hw,y:0,z:hd}, p011:{x:-hw,y:h,z:hd}, p111:{x:hw,y:h,z:hd}
-				};
-				const tris = [];
-				function t(a,b,c){ tris.push([a,b,c]); }
-				// front face (z = hd)
-				t(v.p001,v.p101,v.p111); t(v.p001,v.p111,v.p011);
-				// back face (z = -hd)
-				t(v.p100,v.p000,v.p010); t(v.p100,v.p010,v.p110);
-				// left face (x = -hw)
-				t(v.p000,v.p001,v.p011); t(v.p000,v.p011,v.p010);
-				// right face (x = hw)
-				t(v.p101,v.p100,v.p110); t(v.p101,v.p110,v.p111);
-				// bottom face
-				t(v.p000,v.p100,v.p101); t(v.p000,v.p101,v.p001);
-
-				// lid template: approximate curved lid along width with segments
-				const segments = 9;
-				const lid = { verts: [], indices: [] };
-				for(let i=0;i<segments;i++){
-					const tNorm = i/(segments-1);
-					const x = -hw + tNorm * w;
-					const arc = Math.sin(Math.PI * tNorm) * 20; // lid bulge
-					lid.verts.push({x:x,y:h+arc,z:-hd}); // back
-					lid.verts.push({x:x,y:h+arc,z:hd});  // front
-				}
-				for(let i=0;i<segments-1;i++){
-					const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
-					lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[d]]);
-					lid.indices.push([lid.verts[a], lid.verts[d], lid.verts[c]]);
+			// Chest class (improved): thickness, lid sides, iron bars, and contents + initialItems support
+			class Chest extends WorldObject {
+				constructor(data){
+					super(data);
+					this.opened = !!this.opened;
+					this.collected = !!this.collected;
+					this.contents = data && data.initialItems ? JSON.parse(JSON.stringify(data.initialItems)) : [];
+					this._buildChestMesh();
+					this.actions = this.actions || [];
+					this.actions.push({ key:'q', name:'open' });
 				}
 
-				obj._baseTris = tris;
-				obj._lidTemplate = lid;
-				obj._chestDims = {w,h,d,hw,hd};
-				obj.opened = obj.opened || false;
-				obj.lidAngle = obj.lidAngle || 0;
-				obj.lidTarget = obj.lidTarget || 0;
+				_buildChestMesh(){
+					const obj = this;
+					const w = 80, h = 40, d = 60; // width(x), height(y), depth(z)
+					const hw = w/2, hd = d/2;
+					const thickness = 6; // visual thickness for lid/sides
+					const v = {
+						p000: {x:-hw,y:0,z:-hd}, p100:{x:hw,y:0,z:-hd}, p010:{x:-hw,y:h,z:-hd}, p110:{x:hw,y:h,z:-hd},
+						p001:{x:-hw,y:0,z:hd}, p101:{x:hw,y:0,z:hd}, p011:{x:-hw,y:h,z:hd}, p111:{x:hw,y:h,z:hd}
+					};
+					const tris = [];
+					function t(a,b,c){ tris.push([a,b,c]); }
+					// outer shell faces (simple box)
+					t(v.p001,v.p101,v.p111); t(v.p001,v.p111,v.p011); // front
+					t(v.p100,v.p000,v.p010); t(v.p100,v.p010,v.p110); // back
+					t(v.p000,v.p001,v.p011); t(v.p000,v.p011,v.p010); // left
+					t(v.p101,v.p100,v.p110); t(v.p101,v.p110,v.p111); // right
+					t(v.p000,v.p100,v.p101); t(v.p000,v.p101,v.p001); // bottom
+
+					// iron bars across front/top to 'hold' the chest
+					const barY1 = Math.round(h*0.35);
+					const barY2 = Math.round(h*0.65);
+					const barInset = 8;
+					const b1a = {x:-hw+barInset,y:barY1,z:hd+2}, b1b = {x:-hw+barInset,y:barY1-4,z:hd+2}, b1c = {x:hw-barInset,y:barY1-4,z:hd+2}, b1d = {x:hw-barInset,y:barY1,z:hd+2};
+					const b2a = {x:-hw+barInset,y:barY2,z:hd+2}, b2b = {x:-hw+barInset,y:barY2-4,z:hd+2}, b2c = {x:hw-barInset,y:barY2-4,z:hd+2}, b2d = {x:hw-barInset,y:barY2,z:hd+2};
+					t(b1a,b1b,b1c); t(b1a,b1c,b1d);
+					t(b2a,b2b,b2c); t(b2a,b2c,b2d);
+
+					// lid template: approximate curved lid along width with segments and a thickness underside
+					const segments = 9;
+					const lid = { verts: [], indices: [] };
+					for(let i=0;i<segments;i++){
+						const tNorm = i/(segments-1);
+						const x = -hw + tNorm * w;
+						const arc = Math.sin(Math.PI * tNorm) * 20; // lid bulge
+						lid.verts.push({x:x,y:h+arc,z:-hd}); // back outer
+						lid.verts.push({x:x,y:h+arc,z:hd});  // front outer
+						// underside verts to simulate thickness (used when building sides)
+						lid.verts.push({x:x,y:h+arc-thickness,z:-hd}); // back inner
+						lid.verts.push({x:x,y:h+arc-thickness,z:hd});  // front inner
+					}
+					for(let i=0;i<segments-1;i++){
+						const a = i*4, b = i*4+1, c = (i+1)*4, d = (i+1)*4+1;
+						// top surface
+						lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[d]]);
+						lid.indices.push([lid.verts[a], lid.verts[d], lid.verts[c]]);
+						// underside (inner) faces (optional: helps show thickness when lid is open)
+						const ai = i*4+2, bi = i*4+3, ci = (i+1)*4+2, di = (i+1)*4+3;
+						lid.indices.push([lid.verts[ci], lid.verts[di], lid.verts[bi]]);
+						lid.indices.push([lid.verts[ci], lid.verts[bi], lid.verts[ai]]);
+					}
+
+					// small side faces to close the lid ends (first and last segment)
+					const last = (segments-1)*4;
+					// left end
+					lid.indices.push([lid.verts[0], lid.verts[2], lid.verts[3]]);
+					lid.indices.push([lid.verts[0], lid.verts[3], lid.verts[1]]);
+					// right end
+					lid.indices.push([lid.verts[last+0], lid.verts[last+2], lid.verts[last+3]]);
+					lid.indices.push([lid.verts[last+0], lid.verts[last+3], lid.verts[last+1]]);
+
+					obj._baseTris = tris;
+					obj._lidTemplate = lid;
+					obj._chestDims = {w,h,d,hw,hd,thickness};
+					obj.opened = obj.opened || false;
+					obj.lidAngle = obj.lidAngle || 0;
+					obj.lidTarget = obj.lidTarget || 0;
+				}
+
+				open(){
+					if(!this.opened){
+						this.opened = true; this.lidTarget = -Math.PI * 0.65;
+						// give sample gold once when first opened (legacy behavior)
+						if(!this.collected){ this.collected = true; const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new InventoryItem('gold','Gold',1)); showPickup('Picked up Gold'); saveState(); }
+					} else {
+						// closing: ask user for initial contents if none present
+						this.opened = false; this.lidTarget = 0;
+						if(!this.contents || this.contents.length === 0){
+							const resp = prompt('Enter chest contents as item:qty, comma separated. Example: gold:2, wood:3');
+							if(resp){
+								const arr = resp.split(',').map(s=>s.trim()).filter(Boolean);
+								this.contents = [];
+								for(const e of arr){
+									const parts = e.split(':').map(x=>x.trim());
+									const id = parts[0] || 'item'; const qty = parseInt(parts[1]) || 1;
+									const name = id.charAt(0).toUpperCase() + id.slice(1);
+									this.contents.push({ id, name, qty });
+								}
+								showPickup('Chest contents set'); saveState();
+							}
+						}
+					}
+				}
+
+				update(dt){ if(this._lidTemplate){ const speed = 4.0; const delta = this.lidTarget - (this.lidAngle || 0); const maxStep = speed * dt; let step = Math.max(-maxStep, Math.min(maxStep, delta)); this.lidAngle = (this.lidAngle || 0) + step; } }
+
+				static spawn(x,y,z,world=0, initialItems){ const id = Date.now()+Math.floor(Math.random()*1000); const c = new Chest({id,name:'Chest',x,y,z,color:'#8B5A2B',world, initialItems: initialItems || []}); objects.push(c); return c; }
 			}
-			open(){
-				if(!this.opened){
-					this.opened = true; this.lidTarget = -Math.PI * 0.65;
-					if(!this.collected){ this.collected = true; const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new InventoryItem('gold','Gold',1)); showPickup('Picked up Gold'); saveState(); }
-				} else { this.opened = false; this.lidTarget = 0; }
-			}
-			update(dt){
-				if(this._lidTemplate){ const speed = 4.0; const delta = this.lidTarget - (this.lidAngle || 0); const maxStep = speed * dt; let step = Math.max(-maxStep, Math.min(maxStep, delta)); this.lidAngle = (this.lidAngle || 0) + step; }
-			}
-			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const c = new Chest({id,name:'Chest',x,y,z,color:'#8B5A2B',world}); objects.push(c); return c; }
-		}
 
 		// Inventory-specific item classes
 		class GoldItem extends InventoryItem { constructor(qty=1){ super('gold','Gold',qty); } }
