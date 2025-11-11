@@ -286,6 +286,14 @@
 				this.actions.push({key:'q', name:'climb'});
 				this.climbHeight = data && typeof data.climbHeight !== 'undefined' ? data.climbHeight : 60;
 			}
+
+			static spawn(x,y,z,world=0){
+				const id = Date.now() + Math.floor(Math.random()*1000);
+				const l = new Ladder({ id, name:'Ladder', x:x, y:y, z:z, color:'#c68642', world, isworld:true, iswall:true });
+				// simple thin tetrahedron to represent ladder
+				l.tetrahedrons = [ { a:{x:x-6,y:y,z:z-6}, b:{x:x+6,y:y,z:z-6}, c:{x:x+6,y:y+80,z:z+6}, d:{x:x-6,y:y+80,z:z+6} } ];
+				objects.push(l); return l;
+			}
 		}
 
 		// helper: build a cylinder mesh (local coords) and store as _baseTris
@@ -930,38 +938,18 @@
 				if(k === 'q'){
 					const obj = typeof getObjectInCenter === 'function' ? getObjectInCenter() : null;
 					if(obj){
-						if(obj.name && obj.name.toLowerCase() === 'chest'){
-							// toggle open target (positive angle to lift lid)
-							if(!obj.opened){
-								obj.opened = true; obj.lidTarget = -Math.PI * 0.65;
-								// collect gold first time
-								if(!obj.collected){
-									obj.collected = true;
-									const existing = inventory.find(it=>it.id === 'gold');
-									if(existing) existing.qty = (existing.qty||0) + 1;
-									else inventory.push(new InventoryItem('gold','Gold',1));
-									console.log('Collected gold!');
-									showPickup('Picked up Gold');
-								}
-							} else {
-								obj.opened = false; obj.lidTarget = 0;
-							}
-							console.log('Chest state ->', obj.opened ? 'opening' : 'closing');
+						// prefer object method if available (Chest.open, Portal.enter)
+						if(typeof obj.open === 'function'){
+							obj.open();
+							saveState();
+						} else if(typeof obj.enter === 'function'){
+							obj.enter();
+							saveState();
 						} else {
-							// default interact: add a property interactions++
+							// fallback: mark interaction and call any action matching 'q'
 							obj.interactions = (obj.interactions||0) + 1;
-								console.log('Interacted with',obj.name,obj.interactions);
-								// portal: entering
-								if(obj.name && obj.name.toLowerCase() === 'portal'){
-									// toggle world
-									const targetWorld = (player.world === 0) ? 1 : 0;
-									player.world = targetWorld;
-									// simple teleport: move player to a spawn point depending on world
-									if(targetWorld === 1){ player.x = 100; player.z = 100; player.y = 0; }
-									else { player.x = 300; player.z = 200; player.y = 0; }
-									showPickup('Entered world ' + player.world);
-									console.log('Player moved to world', player.world);
-								}
+							if(obj.actions){ for(const a of obj.actions){ if(a.key === 'q'){ performAction(obj,a); } }}
+							console.log('Interacted with',obj.name,obj.interactions);
 						}
 					}
 				}
@@ -1041,9 +1029,12 @@
 				if(player.onGround){ player.vel.y = player.jumpImpulse; player.onGround = false; }
 			}
 
-			// animate chest lids towards their target angles
+			// per-object updates (allow objects to animate themselves)
 			for(const obj of objects){
-				if(obj._lidTemplate){
+				if(typeof obj.update === 'function'){
+					try{ obj.update(dt); }catch(e){ console.warn('Object update failed', e); }
+				}else if(obj._lidTemplate){
+					// legacy: animate chest lids towards their target angles
 					const speed = 4.0; // radians per second
 					const delta = obj.lidTarget - (obj.lidAngle || 0);
 					const maxStep = speed * dt;
