@@ -329,7 +329,9 @@
 		// spawn a portal (paired): this portal goes to world 1 at x:100,z:100
 		Portal.spawn(600,0,520,0, { target: { x:100, y:0, z:100, world:1 } });
 
-		// Door class: toggle open/closed with Q (when centered)
+
+
+		// Chest class
 		class Door extends WorldObject {
 			constructor(data){
 				super(data);
@@ -338,61 +340,63 @@
 				this.actions.push({ key: 'q', name: 'toggle' });
 				// doors block when closed
 				this.iswall = !this.open;
+				this._angle = this.open ? Math.PI/2 : 0;
+				this._targetAngle = this._angle;
 			}
-			open(){ this.toggle(); }
-			close(){ this.open = false; this.iswall = true; showPickup('Door closed'); }
-			toggle(){ if(this.open){ this.close(); } else { this.open = true; this.iswall = false; showPickup('Door opened'); } }
+			open(){ this._targetAngle = Math.PI * 0.5; this.iswall = false; }
+			close(){ this._targetAngle = 0; this.iswall = true; }
+			toggle(){ if(this._targetAngle > 0.001) this.close(); else this.open(); }
+			update(dt){
+				// animate angle towards target
+				const speed = 3.5; // radians per second
+				const delta = this._targetAngle - this._angle;
+				const step = Math.max(-speed*dt, Math.min(speed*dt, delta));
+				this._angle += step;
+				// when almost closed/open, set iswall appropriately
+				if(Math.abs(this._angle - 0) < 0.001) this.iswall = true;
+				if(Math.abs(this._angle - Math.PI*0.5) < 0.001) this.iswall = false;
+				// if we have baseLocal verts, update tetrahedrons using rotation around left hinge
+				if(this._baseLocal && this._tetIndices){
+					const angle = this._angle;
+					const hingeX = this._hingeX || -this._dims.hx; // local hinge x
+					const cos = Math.cos(angle), sin = Math.sin(angle);
+					this.tetrahedrons = this._tetIndices.map(ti => ({
+						a: this._localToWorldRot(this._baseLocal[ti[0]], hingeX, cos, sin),
+						b: this._localToWorldRot(this._baseLocal[ti[1]], hingeX, cos, sin),
+						c: this._localToWorldRot(this._baseLocal[ti[2]], hingeX, cos, sin),
+						d: this._localToWorldRot(this._baseLocal[ti[3]], hingeX, cos, sin)
+					}));
+				}
+			}
+			_localToWorldRot(v, hingeX, cos, sin){
+				// rotate around local Y axis at x = hingeX
+				const dx = v.x - hingeX;
+				const dz = v.z;
+				const rx = hingeX + (cos * dx - sin * dz);
+				const rz = (sin * dx + cos * dz);
+				return { x: this.x + rx, y: this.y + v.y, z: this.z + rz };
+			}
 			static spawn(x,y,z,world=0){
 				const id = Date.now()+Math.floor(Math.random()*1000);
 				const w = 8, h = 80, d = 40; // thin door
 				const hx = w/2, hy = h/2, hz = d/2;
-				const d0 = {x:x-hx,y:y,z:z-hz};
-				const d1 = {x:x+hx,y:y,z:z-hz};
-				const d2 = {x:x-hx,y:y,z:z+hz};
-				const d3 = {x:x+hx,y:y,z:z+hz};
-				const d4 = {x:x-hx,y:y+hy,z:z-hz};
-				const d5 = {x:x+hx,y:y+hy,z:z-hz};
-				const d6 = {x:x-hx,y:y+hy,z:z+hz};
-				const d7 = {x:x+hx,y:y+hy,z:z+hz};
+				// local vertices centered at door origin
+				const baseLocal = [
+					{x:-hx,y:-0,z:-hz}, {x:+hx,y:-0,z:-hz}, {x:-hx,y:-0,z:+hz}, {x:+hx,y:-0,z:+hz},
+					{x:-hx,y:hy,z:-hz}, {x:+hx,y:hy,z:-hz}, {x:-hx,y:hy,z:+hz}, {x:+hx,y:hy,z:+hz}
+				];
+				// tetra index quads (each entry 4 indices into baseLocal)
+				const tetIdx = [ [0,1,2,4], [1,2,3,7], [1,4,5,7], [2,4,6,7], [1,2,4,7] ];
 				const door = new Door({ id, name:'Door', x,y,z, color:'#8b5a2b', world, isworld:true, iswall:true });
-				door.tetrahedrons = [ {a:d0,b:d1,c:d2,d:d4}, {a:d1,b:d2,c:d3,d:d7}, {a:d1,b:d4,c:d5,d:d7}, {a:d2,b:d4,c:d6,d:d7}, {a:d1,b:d2,c:d4,d:d7} ];
+				door._baseLocal = baseLocal;
+				door._tetIndices = tetIdx;
+				door._dims = {hx,hy,hz};
+				door._hingeX = -hx; // left edge hinge
+				// initialize tetrahedrons
+				door.tetrahedrons = tetIdx.map(ti => ({ a: {x:x+baseLocal[ti[0]].x, y:y+baseLocal[ti[0]].y, z:z+baseLocal[ti[0]].z}, b: {x:x+baseLocal[ti[1]].x, y:y+baseLocal[ti[1]].y, z:z+baseLocal[ti[1]].z}, c: {x:x+baseLocal[ti[2]].x, y:y+baseLocal[ti[2]].y, z:z+baseLocal[ti[2]].z}, d: {x:x+baseLocal[ti[3]].x, y:y+baseLocal[ti[3]].y, z:z+baseLocal[ti[3]].z} }));
 				objects.push(door); return door;
 			}
 		}
-
-		// spawn a sample door near the player for testing
-		Door.spawn(260,0,520,0);
-
-		// Chest class
-		class Chest extends WorldObject {
-			constructor(data){
-				super(data);
-				this.opened = !!this.opened;
-				this.collected = !!this.collected;
-				this._buildChestMesh();
-				this.actions = this.actions || [];
-				this.actions.push({ key:'q', name:'open' });
-			}
-
-			// build chest mesh (base + segmented curved lid) — local to Chest class
-			_buildChestMesh(){
-				const obj = this;
-				const w = 80, h = 40, d = 60; // width(x), height(y), depth(z)
-				const hw = w/2, hd = d/2;
-				const v = {
-					p000: {x:-hw,y:0,z:-hd}, p100:{x:hw,y:0,z:-hd}, p010:{x:-hw,y:h,z:-hd}, p110:{x:hw,y:h,z:-hd},
-					p001:{x:-hw,y:0,z:hd}, p101:{x:hw,y:0,z:hd}, p011:{x:-hw,y:h,z:hd}, p111:{x:hw,y:h,z:hd}
-				};
-				const tris = [];
-				function t(a,b,c){ tris.push([a,b,c]); }
-				// front face (z = hd)
-				t(v.p001,v.p101,v.p111); t(v.p001,v.p111,v.p011);
-				// back face (z = -hd)
-				t(v.p100,v.p000,v.p010); t(v.p100,v.p010,v.p110);
-				// left face (x = -hw)
-				t(v.p000,v.p001,v.p011); t(v.p000,v.p011,v.p010);
-				// right face (x = hw)
-				t(v.p101,v.p100,v.p110); t(v.p101,v.p110,v.p111);
 				// bottom face
 				t(v.p000,v.p100,v.p101); t(v.p000,v.p101,v.p001);
 
