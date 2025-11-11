@@ -479,7 +479,7 @@
 
 				open(){
 					if(!this.opened){
-						this.opened = true; this.lidTarget = -Math.PI * 0.65;
+						this.opened = true; this.lidTarget = Math.PI * 0.65;
 						// give sample gold once when first opened (legacy behavior)
 						if(!this.collected){ this.collected = true; const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new InventoryItem('gold','Gold',1)); showPickup('Picked up Gold'); saveState(); }
 						// show chest GUI
