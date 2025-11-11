@@ -44,6 +44,71 @@
 		for(const o of objects) if(typeof o.world === 'undefined') o.world = 0;
 
 		class WorldObject extends GameObject { constructor(data){ super(data); this.world = (data && data.world) || 0; } }
+			this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
+			this.isworld = true; this.iswall = true;
+		}
+
+		enter(){
+			if(this.driver) return; // already occupied
+			this.driver = { id: 'player' };
+			player._inVehicle = this;
+			// snap player to car
+			player.x = this.x; player.y = this.y + 8; player.z = this.z;
+			player.vel = { x:0, y:0, z:0 };
+			player.onGround = false;
+			showPickup('Entered car');
+		}
+
+		exit(){
+			if(!this.driver) return;
+			this.driver = null;
+			player._inVehicle = null;
+			// place player behind car
+			const rot = this.rotY || 0;
+			const backX = this.x - Math.sin(rot) * (this.dim.d/2 + player.radius + 6);
+			const backZ = this.z - Math.cos(rot) * (this.dim.d/2 + player.radius + 6);
+			player.x = backX; player.z = backZ; player.y = Math.max(0, this.y + 4);
+			showPickup('Exited car');
+		}
+
+		toggleReverse(){ this.reverse = !this.reverse; }
+
+		update(dt){
+			// update physics when occupied
+			if(this.driver){
+				// steering
+				if(keysDown.has('j')){ this.rotY = (this.rotY||0) - this.turnSpeed * dt; }
+				if(keysDown.has('l')){ this.rotY = (this.rotY||0) + this.turnSpeed * dt; }
+				// throttle/brake
+				if(keysDown.has('i')){ // accelerate
+					const dir = this.reverse ? -1 : 1;
+					this.speed += this.accel * dt * dir;
+				} else if(keysDown.has('k')){ // brake
+					if(this.speed > 0) this.speed = Math.max(0, this.speed - this.brake * dt);
+					else this.speed = Math.min(0, this.speed + this.brake * dt);
+				} else {
+					// natural friction
+					this.speed *= Math.max(0, 1 - 2.0 * dt);
+				}
+				// clamp
+				this.speed = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.speed));
+				// update position based on heading
+				const forward = Math.sin(this.rotY || 0);
+				const forwardZ = Math.cos(this.rotY || 0);
+				this.x += forward * this.speed * dt;
+				this.z += forwardZ * this.speed * dt;
+				// keep player glued to car
+				player.x = this.x; player.z = this.z; player.y = this.y + 8; player.rotY = this.rotY || 0;
+				// update collision tetrahedrons to follow car position
+				const hw = this.dim.w/2, hy = this.dim.h/2, hd = this.dim.d/2;
+				const x = this.x, y = this.y + hy, z = this.z;
+				
+				const l = new Ladder({ id, name:'Ladder', x:x, y:y, z:z, color:'#c68642', world, isworld:true, iswall:true });
+				// simple thin tetrahedron to represent ladder
+				l.tetrahedrons = [ { a:{x:x-6,y:y,z:z-6}, b:{x:x+6,y:y,z:z-6}, c:{x:x+6,y:y+80,z:z+6}, d:{x:x-6,y:y+80,z:z+6} } ];
+				objects.push(l); return l;
+			}
+		}
 
 				this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
 				this.isworld = true; this.iswall = true;
