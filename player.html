@@ -165,6 +165,19 @@
 			if(obj.isSprite && obj.color && !obj.texture){ const dataUrl = createColorTextureDataURL(obj.color); loadTexture(obj, dataUrl); }
 		}
 
+		// Minimal Tree1 class (simple trunk + canopy) — lightweight placeholder
+		class Tree1 extends WorldObject {
+			constructor(data){
+				super(data);
+				this.actions = this.actions || [];
+				this.actions.push({ key:'z', name: 'chop' });
+				// trunk mesh
+				buildCylinderMesh(this, 6, 40, 12);
+				this.tetrahedrons = [ { a:{x:this.x-6,y:this.y,z:this.z-6}, b:{x:this.x+6,y:this.y,z:this.z-6}, c:{x:this.x+6,y:this.y+40,z:this.z+6}, d:{x:this.x-6,y:this.y+40,z:this.z+6} } ];
+			}
+			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const t = new Tree1({ id, name:'Tree', x,y,z, color:'#064e3b', world, isworld:true, iswall:true }); objects.push(t); return t; }
+		}
+
 		// spawn additional trees using Tree1
 		Tree1.spawn(420, 600, 0);
 		Tree1.spawn(240, 700, 0);
