@@ -1519,7 +1519,11 @@
 		// save/load state to cookies
 		function saveState(){
 			try{
-				const state = { objects: objects.map(o=>({id:o.id,x:o.x,y:o.y,z:o.z,opened:o.opened,collected:o.collected, world:o.world})),
+				const state = { objects: objects.map(o=>{
+						const base = {id:o.id,x:o.x,y:o.y,z:o.z,opened:o.opened,collected:o.collected, world:o.world};
+						if(o.contents) base.contents = o.contents;
+						return base;
+					}),
 					player:{x:player.x,y:player.y,z:player.z}, inventory, timestamp: Date.now() };
 				document.cookie = 'game_state=' + encodeURIComponent(JSON.stringify(state)) + ';max-age='+(60*60*24*365)+';path=/';
 				console.log('Saved state to cookies');
@@ -1534,7 +1538,7 @@
 				const state = JSON.parse(val);
 				if(state.player){ player.x = state.player.x; player.y = state.player.y; player.z = state.player.z; }
 					if(state.objects){
-						for(const s of state.objects){ const o = objects.find(x=>x.id===s.id); if(o){ o.x=s.x; o.y=s.y; o.z=s.z; o.opened = !!s.opened; o.collected = !!s.collected; if(o.opened) o.lidTarget = -Math.PI * 0.65; else o.lidTarget = 0; if(typeof s.world !== 'undefined') o.world = s.world; }}
+						for(const s of state.objects){ const o = objects.find(x=>x.id===s.id); if(o){ o.x=s.x; o.y=s.y; o.z=s.z; o.opened = !!s.opened; o.collected = !!s.collected; if(o.opened) o.lidTarget = -Math.PI * 0.65; else o.lidTarget = 0; if(typeof s.world !== 'undefined') o.world = s.world; if(s.contents) o.contents = s.contents; }}
 					}
 				if(state.inventory) inventory = state.inventory;
 				console.log('Loaded state from cookies');
