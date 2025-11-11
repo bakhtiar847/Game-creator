@@ -561,7 +561,52 @@
 			}
 		}
 
-		// convert any existing chest-like objects into Chest instances (remove originals)
+			// Car world object: simple driveable box. I: accelerate, K: brake, J/L: steer, O: toggle reverse, Q: enter/exit
+			class Car extends WorldObject {
+				constructor(data){
+					super(data);
+					this.actions = this.actions || [];
+					this.actions.push({ key:'q', name:'enter' });
+					this._driver = null;
+					this._reverse = false;
+					this.speedForward = 0;
+					this.accel = data && data.accel || 420;
+					this.maxSpeed = data && data.maxSpeed || 320;
+					this.steerSpeed = data && data.steerSpeed || 2.8;
+					this.rotY = data && data.rotY || 0;
+					this._dims = data && data._dims || { hx:30, hy:12, hz:18 };
+				}
+
+				open(){
+					// toggle enter/exit
+					if(this._driver){
+						const p = objects.find(o=>o.id === this._driver);
+						if(p){ p._inVehicle = null; const offset = (this._dims.hz || 18) + (p.radius||28) + 6; p.x = this.x - Math.sin(this.rotY) * offset; p.z = this.z - Math.cos(this.rotY) * offset; p.y = this.y; }
+						this._driver = null; showPickup('Exited car');
+					} else {
+						this._driver = player.id; player._inVehicle = this.id; player.vel.y = 0; player.onGround = true; showPickup('Entered car');
+					}
+					saveState();
+				}
+
+				update(dt){ /* car-specific stepping happens in main physics loop */ }
+
+				static spawn(x,y,z,world=0, opts={}){
+					const id = Date.now()+Math.floor(Math.random()*1000);
+					const car = new Car(Object.assign({ id, name: opts.name || 'Car', x, y, z, color: opts.color || '#2b6f9b', world, isworld:true, iswall:false }, opts));
+					const hx = (opts.hx || 30), hy = (opts.hy || 12), hz = (opts.hz || 18);
+					car._dims = {hx,hy,hz};
+					// approximate box with a few tetrahedrons
+					const a = {x:x-hx,y:y,z:z-hz}, b={x:x+hx,y:y,z:z-hz}, c={x:x-hx,y:y,z:z+hz}, d={x:x+hx,y:y,z:z+hz};
+					const e={x:x-hx,y:y+2*hy,z:z-hz}, f={x:x+hx,y:y+2*hy,z:z-hz}, g={x:x-hx,y:y+2*hy,z:z+hz}, h={x:x+hx,y:y+2*hy,z:z+hz};
+					car.tetrahedrons = [ {a:a,b:b,c:c,d:e}, {a:b,b:d,c:h,d:f}, {a:b,b:f,c:e,d:h}, {a:c,b:e,c:g,d:h}, {a:b,b:c,c:e,d:h} ];
+					car.speedForward = 0; car._reverse = false;
+					objects.push(car);
+					return car;
+				}
+			}
+
+			// convert any existing chest-like objects into Chest instances (remove originals)
 		for(let i=objects.length-1;i>=0;i--){ const o=objects[i]; if(o.name && o.name.toLowerCase()==='chest'){ objects.splice(i,1); Chest.spawn(o.x,o.y,o.z,o.world); } }
 
 		// spawn a couple more chests
