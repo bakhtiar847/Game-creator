@@ -104,21 +104,6 @@
 		}
 
 		let objects = [
-			// green floor object (large area under ground)
-			{
-				id:4,
-				name:'Floor',
-				x:0,y:-45,z:0,
-				triangles:[],
-				tetrahedrons:[
-					{a:{x:-2000,y:-50,z:-2000},b:{x:2000,y:-50,z:-2000},c:{x:2000,y:-50,z:2000},d:{x:-2000,y:-40,z:2000}}
-				],
-				actions:[],
-				isworld:true,
-				iswall:true,
-				color:'#16a34a',
-				description:'Green floor object'
-			},
 			{
 				id:1,
 				name:'Player',
@@ -127,51 +112,6 @@
 				tetrahedrons:[],
 				actions:[],
 				isplayer:true
-			},
-			{
-				id:2,
-				name:'Wall',
-				x:500,y:0,z:400,
-				triangles:[],
-				// simple tetrahedron (four points) in world coords
-				tetrahedrons:[
-					{a:{x:480,y:0,z:380},b:{x:520,y:0,z:380},c:{x:520,y:100,z:420},d:{x:480,y:100,z:420}}
-				],
-				actions:[{key:'q',name:'inspect'}],
-				isworld:true,
-				iswall:true,
-				color:'#94a3b8',
-				description:'A simple wall tetrahedron'
-			},
-			{
-				id:3,
-				name:'Chest',
-				x:300,y:0,z:500,
-				triangles:[],
-				tetrahedrons:[{a:{x:280,y:0,z:480},b:{x:320,y:0,z:480},c:{x:320,y:60,z:520},d:{x:280,y:60,z:520}}],
-				actions:[{key:'q',name:'open'}, {key:'z',name:'special'}],
-				isworld:true,
-				iswall:true,
-				color:'#8B5A2B',
-				description:'A treasure chest with loot.'
-			},
-			// tree split into trunk and canopy so we can color and act on parts separately
-			{
-				id:5,
-				name:'Tree',
-				x:360,y:0,z:540,
-				// triangles will be filled with a cylindrical trunk mesh via buildCylinderMesh
-				triangles:[],
-				// canopy as tetrahedrons for collision/visual
-				tetrahedrons:[
-					{a:{x:340,y:40,z:520},b:{x:380,y:40,z:520},c:{x:360,y:80,z:540},d:{x:360,y:55,z:500}},
-					{a:{x:340,y:45,z:560},b:{x:380,y:45,z:560},c:{x:360,y:85,z:540},d:{x:360,y:60,z:580}}
-				],
-				actions:[{key:'x',name:'cut'}],
-				isworld:true,
-				iswall:true,
-				color:'#8B5A2B',
-				description:'Tree with trunk and canopy. Press X to cut.'
 			}
 		];
 
