@@ -31,17 +31,22 @@
 		@media (max-width:600px){.overlay{position:fixed;left:8px;right:8px;top:auto;bottom:8px;width:auto}}
 	</style>
 </head>
-<script>
-		// small runtime helpers & base classes that need to exist before further declarations
-		class InventoryItem { constructor(id,name,qty=1){ this.id = id; this.name = name; this.qty = qty; } }
-		let objects = [ { id:1, name:'Player', x:300, y:100, z:200, triangles:[], tetrahedrons:[], actions:[], isplayer:true } ];
+<body>
+	<div class="container">
+		<header>
+			<h1>Player — Objects Preview</h1>
+			<div class="toolbar"></div>
+			<div id="selectedInfo" style="display:none;margin-left:12px;color:var(--muted)"></div>
+		</header>
 
-		function loadTexture(obj, src){ const img = new Image(); img.crossOrigin='anonymous'; img.onload = ()=>{ obj.texture = img; renderer && renderer.render(); }; img.onerror = ()=>{ console.warn('Failed to load texture', src); }; img.src = src; return img; }
+		<main>
+			<section class="stage" id="stage" aria-label="Game stage">
+				<canvas id="canvas" aria-label="3D canvas renderer"></canvas>
+				<div class="grid" aria-hidden="true"></div>
+			</section>
+		</main>
 
-		for(const o of objects){ if(o.textureSrc) loadTexture(o, o.textureSrc); }
 
-		objects = objects.map(o=> new GameObject(o));
-		for(const o of objects) if(typeof o.world === 'undefined') o.world = 0;
 
 		<!-- pause menu -->
 		<div id="pauseMenu" style="display:none; position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(2,6,23,0.9);color:#e6eef6;padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);z-index:40;min-width:260px;text-align:center">
@@ -93,6 +98,92 @@
 				this.lidTarget = this.lidTarget || 0;
 			}
 		}
+
+	// Car world object: enter/exit and simple driving controls (I accelerate, K brake, O toggle reverse, J/L steer)
+	class Car extends WorldObject {
+		constructor(data){
+			super(data);
+			this.actions = this.actions || [];
+			this.actions.push({ key:'q', name: 'enter' });
+			this.driver = null; // reference to player when occupied
+			this.reverse = false;
+			this.speed = 0; // current forward speed (units/sec)
+			this.maxSpeed = 220;
+			this.accel = 500;
+			this.brake = 800;
+			this.turnSpeed = 2.4; // radians/sec at speed
+			this.dim = { w: 120, h: 28, d: 70 };
+			// simple box-like tetrahedron decomposition for collision
+			const hw = this.dim.w/2, hy = this.dim.h/2, hd = this.dim.d/2;
+			const x = this.x, y = this.y + hy, z = this.z;
+			const p0 = { x:x-hw, y:y-hy, z:z-hd }, p1 = { x:x+hw, y:y-hy, z:z-hd }, p2 = { x:x-hw, y:y-hy, z:z+hd }, p3 = { x:x+hw, y:y-hy, z:z+hd };
+			const p4 = { x:x-hw, y:y+hy, z:z-hd }, p5 = { x:x+hw, y:y+hy, z:z-hd }, p6 = { x:x-hw, y:y+hy, z:z+hd }, p7 = { x:x+hw, y:y+hy, z:z+hd };
+			this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
+			this.isworld = true; this.iswall = true;
+		}
+
+		enter(){
+			if(this.driver) return; // already occupied
+			this.driver = { id: 'player' };
+			player._inVehicle = this;
+			// snap player to car
+			player.x = this.x; player.y = this.y + 8; player.z = this.z;
+			player.vel = { x:0, y:0, z:0 };
+			player.onGround = false;
+			showPickup('Entered car');
+		}
+
+		exit(){
+			if(!this.driver) return;
+			this.driver = null;
+			player._inVehicle = null;
+			// place player behind car
+			const rot = this.rotY || 0;
+			const backX = this.x - Math.sin(rot) * (this.dim.d/2 + player.radius + 6);
+			const backZ = this.z - Math.cos(rot) * (this.dim.d/2 + player.radius + 6);
+			player.x = backX; player.z = backZ; player.y = Math.max(0, this.y + 4);
+			showPickup('Exited car');
+		}
+
+		toggleReverse(){ this.reverse = !this.reverse; }
+
+		update(dt){
+			// update physics when occupied
+			if(this.driver){
+				// steering
+				if(keysDown.has('j')){ this.rotY = (this.rotY||0) - this.turnSpeed * dt; }
+				if(keysDown.has('l')){ this.rotY = (this.rotY||0) + this.turnSpeed * dt; }
+				// throttle/brake
+				if(keysDown.has('i')){ // accelerate
+					const dir = this.reverse ? -1 : 1;
+					this.speed += this.accel * dt * dir;
+				} else if(keysDown.has('k')){ // brake
+					if(this.speed > 0) this.speed = Math.max(0, this.speed - this.brake * dt);
+					else this.speed = Math.min(0, this.speed + this.brake * dt);
+				} else {
+					// natural friction
+					this.speed *= Math.max(0, 1 - 2.0 * dt);
+				}
+				// clamp
+				this.speed = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.speed));
+				// update position based on heading
+				const forward = Math.sin(this.rotY || 0);
+				const forwardZ = Math.cos(this.rotY || 0);
+				this.x += forward * this.speed * dt;
+				this.z += forwardZ * this.speed * dt;
+				// keep player glued to car
+				player.x = this.x; player.z = this.z; player.y = this.y + 8; player.rotY = this.rotY || 0;
+				// update collision tetrahedrons to follow car position
+				const hw = this.dim.w/2, hy = this.dim.h/2, hd = this.dim.d/2;
+				const x = this.x, y = this.y + hy, z = this.z;
+				const p0 = { x:x-hw, y:y-hy, z:z-hd }, p1 = { x:x+hw, y:y-hy, z:z-hd }, p2 = { x:x-hw, y:y-hy, z:z+hd }, p3 = { x:x+hw, y:y-hy, z:z+hd };
+				const p4 = { x:x-hw, y:y+hy, z:z-hd }, p5 = { x:x+hw, y:y+hy, z:z-hd }, p6 = { x:x-hw, y:y+hy, z:z+hd }, p7 = { x:x+hw, y:y+hy, z:z+hd };
+				this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
+			}
+		}
+
+		static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const c = new Car({ id, name:'Car', x,y,z, color:'#334155', world, isworld:true, iswall:true }); objects.push(c); return c; }
+	}
 
 		class InventoryItem {
 			constructor(id, name, qty = 1){ this.id = id; this.name = name; this.qty = qty; }
@@ -168,62 +259,8 @@
 				this.climbHeight = data && typeof data.climbHeight !== 'undefined' ? data.climbHeight : 60;
 			}
 
-
-		enter(){
-			if(this.driver) return; // already occupied
-			this.driver = { id: 'player' };
-			player._inVehicle = this;
-			// snap player to car
-			player.x = this.x; player.y = this.y + 8; player.z = this.z;
-			player.vel = { x:0, y:0, z:0 };
-			player.onGround = false;
-			showPickup('Entered car');
-		}
-
-		exit(){
-			if(!this.driver) return;
-			this.driver = null;
-			player._inVehicle = null;
-			// place player behind car
-			const rot = this.rotY || 0;
-			const backX = this.x - Math.sin(rot) * (this.dim.d/2 + player.radius + 6);
-			const backZ = this.z - Math.cos(rot) * (this.dim.d/2 + player.radius + 6);
-			player.x = backX; player.z = backZ; player.y = Math.max(0, this.y + 4);
-			showPickup('Exited car');
-		}
-
-		toggleReverse(){ this.reverse = !this.reverse; }
-
-		update(dt){
-			// update physics when occupied
-			if(this.driver){
-				// steering
-				if(keysDown.has('j')){ this.rotY = (this.rotY||0) - this.turnSpeed * dt; }
-				if(keysDown.has('l')){ this.rotY = (this.rotY||0) + this.turnSpeed * dt; }
-				// throttle/brake
-				if(keysDown.has('i')){ // accelerate
-					const dir = this.reverse ? -1 : 1;
-					this.speed += this.accel * dt * dir;
-				} else if(keysDown.has('k')){ // brake
-					if(this.speed > 0) this.speed = Math.max(0, this.speed - this.brake * dt);
-					else this.speed = Math.min(0, this.speed + this.brake * dt);
-				} else {
-					// natural friction
-					this.speed *= Math.max(0, 1 - 2.0 * dt);
-				}
-				// clamp
-				this.speed = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.speed));
-				// update position based on heading
-				const forward = Math.sin(this.rotY || 0);
-				const forwardZ = Math.cos(this.rotY || 0);
-				this.x += forward * this.speed * dt;
-				this.z += forwardZ * this.speed * dt;
-				// keep player glued to car
-				player.x = this.x; player.z = this.z; player.y = this.y + 8; player.rotY = this.rotY || 0;
-				// update collision tetrahedrons to follow car position
-				const hw = this.dim.w/2, hy = this.dim.h/2, hd = this.dim.d/2;
-				const x = this.x, y = this.y + hy, z = this.z;
-	
+			static spawn(x,y,z,world=0){
+				const id = Date.now() + Math.floor(Math.random()*1000);
 				const l = new Ladder({ id, name:'Ladder', x:x, y:y, z:z, color:'#c68642', world, isworld:true, iswall:true });
 				// simple thin tetrahedron to represent ladder
 				l.tetrahedrons = [ { a:{x:x-6,y:y,z:z-6}, b:{x:x+6,y:y,z:z-6}, c:{x:x+6,y:y+80,z:z+6}, d:{x:x-6,y:y+80,z:z+6} } ];
@@ -284,19 +321,6 @@
 			if(obj.isSprite && obj.color && !obj.texture){ const dataUrl = createColorTextureDataURL(obj.color); loadTexture(obj, dataUrl); }
 		}
 
-		// Minimal Tree1 class (simple trunk + canopy) — lightweight placeholder
-		class Tree1 extends WorldObject {
-			constructor(data){
-				super(data);
-				this.actions = this.actions || [];
-				this.actions.push({ key:'z', name: 'chop' });
-				// trunk mesh
-				buildCylinderMesh(this, 6, 40, 12);
-				this.tetrahedrons = [ { a:{x:this.x-6,y:this.y,z:this.z-6}, b:{x:this.x+6,y:this.y,z:this.z-6}, c:{x:this.x+6,y:this.y+40,z:this.z+6}, d:{x:this.x-6,y:this.y+40,z:this.z+6} } ];
-			}
-			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const t = new Tree1({ id, name:'Tree', x,y,z, color:'#064e3b', world, isworld:true, iswall:true }); objects.push(t); return t; }
-		}
-
 		// spawn additional trees using Tree1
 		Tree1.spawn(420, 600, 0);
 		Tree1.spawn(240, 700, 0);
@@ -334,17 +358,6 @@
 		}
 
 		// Ladder & Platform spawn
-		// Minimal Ladder class
-		class Ladder extends WorldObject {
-			constructor(data){
-				super(data);
-				this.actions = this.actions || [];
-				this.actions.push({ key:'q', name:'climb' });
-				this.climbHeight = data && data.climbHeight || (this.y + 120);
-				this.tetrahedrons = [ { a:{x:this.x-6,y:this.y,z:this.z-6}, b:{x:this.x+6,y:this.y,z:this.z-6}, c:{x:this.x+6,y:this.y+120,z:this.z+6}, d:{x:this.x-6,y:this.y+120,z:this.z+6} } ];
-			}
-			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const l = new Ladder({ id, name:'Ladder', x,y,z, color:'#f97316', world, isworld:true, iswall:false }); objects.push(l); return l; }
-		}
 		const ladder = Ladder.spawn(200, 0, 520, 0);
 		const platform = Platform.spawn(200, 80, 560, 0);
 		ladder.climbHeight = platform.y + 4;
@@ -476,15 +489,6 @@
 				super(data);
 				this.opened = !!this.opened;
 				this.collected = !!this.collected;
-				// initial contents: accept array of [id,qty] tuples or array of objects
-				this.contents = [];
-				if(data && data.contents){
-					for(const it of data.contents){
-						if(Array.isArray(it)){
-							const [id,qty] = it; this.contents.push({ id:id, qty: Number(qty) || 0 });
-						} else if(it && it.id){ this.contents.push({ id: it.id, qty: Number(it.qty) || 0 }); }
-					}
-				}
 				this._buildChestMesh();
 				this.actions = this.actions || [];
 				this.actions.push({ key:'q', name:'open' });
@@ -518,14 +522,48 @@
 				for(let i=0;i<segments;i++){
 					const tNorm = i/(segments-1);
 					const x = -hw + tNorm * w;
-					const arc = Math.sin(Math.PI * tNorm) * 20; // lid bulge
-					lid.verts.push({x:x,y:h+arc,z:-hd}); // back
-					lid.verts.push({x:x,y:h+arc,z:hd});  // front
+					const arc = Math.sin(Math.PI * tNorm) * 12; // lid bulge (reduced)
+					// build lid with thickness: top and bottom verts for each side (back/front)
+					const lidTopY = h + arc + 4; // top surface y
+					const lidBotY = h + arc - 4; // bottom surface y (thickness = 8)
+					// back/top, front/top, back/bot, front/bot
+					lid.verts.push({x:x,y:lidTopY,z:-hd}); // a: top back
+					lid.verts.push({x:x,y:lidTopY,z:hd});  // b: top front
+					lid.verts.push({x:x,y:lidBotY,z:-hd}); // c: bot back
+					lid.verts.push({x:x,y:lidBotY,z:hd});  // d: bot front
 				}
+				// create indices for top surface and bottom surface and side faces
 				for(let i=0;i<segments-1;i++){
-					const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
-					lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[d]]);
-					lid.indices.push([lid.verts[a], lid.verts[d], lid.verts[c]]);
+					const a = i*4, b = i*4+1, c = i*4+2, d = i*4+3; // current segment verts
+					const na = (i+1)*4, nb = (i+1)*4+1, nc = (i+1)*4+2, nd = (i+1)*4+3; // next segment verts
+					// top surface (a,b,nb) and (a,nb,na)
+					lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[nb]]);
+					lid.indices.push([lid.verts[a], lid.verts[nb], lid.verts[na]]);
+					// bottom surface (c,nc,nd) and (c,nd,d) (note winding for correct normal)
+					lid.indices.push([lid.verts[c], lid.verts[nc], lid.verts[nd]]);
+					lid.indices.push([lid.verts[c], lid.verts[nd], lid.verts[d]]);
+					// side faces connecting top and bottom at back edge
+					lid.indices.push([lid.verts[a], lid.verts[c], lid.verts[nc]]);
+					lid.indices.push([lid.verts[a], lid.verts[nc], lid.verts[na]]);
+					// side faces connecting top and bottom at front edge
+					lid.indices.push([lid.verts[b], lid.verts[nb], lid.verts[nd]]);
+					lid.indices.push([lid.verts[b], lid.verts[nd], lid.verts[d]]);
+				}
+				// add simple iron bars on top (3 bars across width) — small rectangular strips
+				const bars = 3;
+				for(let bi=0; bi<bars; bi++){
+					const tNorm = (bi+1)/(bars+1);
+					const bx = -hw + tNorm * w;
+					const by = h + 12 + 4; // slightly above lid top
+					const bz = -hd + 4; const bz2 = hd - 4;
+					// four verts for bar (two ends, top surface)
+					const v0 = {x:bx-6,y:by,z:bz}; const v1 = {x:bx+6,y:by,z:bz};
+					const v2 = {x:bx-6,y:by,z:bz2}; const v3 = {x:bx+6,y:by,z:bz2};
+					const idxBase = lid.verts.length;
+					lid.verts.push(v0,v1,v2,v3);
+					// two triangles forming the bar top
+					lid.indices.push([lid.verts[idxBase], lid.verts[idxBase+1], lid.verts[idxBase+3]]);
+					lid.indices.push([lid.verts[idxBase], lid.verts[idxBase+3], lid.verts[idxBase+2]]);
 				}
 
 				obj._baseTris = tris;
@@ -535,69 +573,11 @@
 				obj.lidAngle = obj.lidAngle || 0;
 				obj.lidTarget = obj.lidTarget || 0;
 			}
-					// show a modal to deposit items from inventory into a chest
-		showChestDepositDialog(){
-			if(!this) return;
-			// create modal
-			let modal = document.getElementById('chestDepositModal');
-			if(modal) modal.remove();
-			modal = document.createElement('div'); modal.id = 'chestDepositModal';
-			modal.style.position = 'fixed'; modal.style.left = '50%'; modal.style.top = '50%'; modal.style.transform = 'translate(-50%,-50%)';
-			modal.style.background = 'rgba(2,6,23,0.95)'; modal.style.color = '#e6eef6'; modal.style.padding = '14px'; modal.style.borderRadius = '10px';
-			modal.style.border = '1px solid rgba(255,255,255,0.06)'; modal.style.zIndex = 200; modal.style.minWidth = '320px';
-			const title = document.createElement('div'); title.style.fontWeight='700'; title.style.marginBottom='8px'; title.textContent = 'Put items into chest'; modal.appendChild(title);
-			const info = document.createElement('div'); info.style.marginBottom='8px'; info.style.color='#94a3b8'; info.textContent = `Chest contents: ${this.contents && this.contents.length? this.contents.map(c=>c.id+':'+c.qty).join(', '): 'empty'}`; modal.appendChild(info);
-			const list = document.createElement('div'); list.style.maxHeight='220px'; list.style.overflow='auto'; list.style.marginBottom='8px';
-			// for each inventory item, show a row with input number
-			inventory.forEach((it, idx)=>{
-				const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px 0';
-				const label = document.createElement('div'); label.textContent = `${it.name} (x${it.qty||1})`;
-				const ctrl = document.createElement('input'); ctrl.type='number'; ctrl.min='0'; ctrl.max=String(it.qty||0); ctrl.value='0'; ctrl.style.width='64px'; ctrl.dataset.idx = idx;
-				row.appendChild(label); row.appendChild(ctrl); list.appendChild(row);
-			});
-			modal.appendChild(list);
-			const btnRow = document.createElement('div'); btnRow.style.display='flex'; btnRow.style.justifyContent='flex-end'; btnRow.style.gap='8px';
-			const putBtn = document.createElement('button'); putBtn.textContent='Put selected';
-			const doneBtn = document.createElement('button'); doneBtn.textContent='Done';
-			btnRow.appendChild(putBtn); btnRow.appendChild(doneBtn); modal.appendChild(btnRow);
-			document.body.appendChild(modal);
-
-			putBtn.addEventListener('click', ()=>{
-				// iterate inputs and transfer amounts
-				const inputs = modal.querySelectorAll('input[type=number]');
-				let moved = 0;
-				inputs.forEach(inp=>{
-					const amt = Math.max(0, Math.floor(Number(inp.value)||0));
-					if(amt <= 0) return;
-					const invIdx = Number(inp.dataset.idx);
-					const item = inventory[invIdx];
-					if(!item) return;
-					const take = Math.min(amt, item.qty||0);
-					if(take <= 0) return;
-					// remove from inventory
-					item.qty = (item.qty||0) - take;
-					// add to chest.contents (merge)
-					const existing = this.contents.find(c=>c.id === item.id);
-					if(existing) existing.qty += take; else this.contents.push({ id: item.id, qty: take });
-					moved += take;
-				});
-				// cleanup zero-qty inventory entries
-				for(let i=inventory.length-1;i>=0;i--){ if(inventory[i].qty <= 0) inventory.splice(i,1); }
-				if(moved > 0){ showPickup(`Placed ${moved} item(s) into chest`); saveState(); refresh(); info.textContent = `Chest contents: ${this.contents.map(c=>c.id+':'+c.qty).join(', ')}`; }
-			});
-
-			doneBtn.addEventListener('click', ()=>{ modal.remove(); });
-		}
 			open(){
 				if(!this.opened){
 					this.opened = true; this.lidTarget = -Math.PI * 0.65;
 					if(!this.collected){ this.collected = true; const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new InventoryItem('gold','Gold',1)); showPickup('Picked up Gold'); saveState(); }
-				} else {
-					// closing the chest — offer to put items into it
-					this.opened = false; this.lidTarget = 0;
-					// defer UI so lid animation plays a bit
-					setTimeout(()=>{ showChestDepositDialog(this); }, 200);
-				}
+				} else { this.opened = false; this.lidTarget = 0; }
 			}
 			update(dt){
 				if(this._lidTemplate){ const speed = 4.0; const delta = this.lidTarget - (this.lidAngle || 0); const maxStep = speed * dt; let step = Math.max(-maxStep, Math.min(maxStep, delta)); this.lidAngle = (this.lidAngle || 0) + step; }
@@ -668,6 +648,9 @@
 
 		// place an axe in the world for pickup
 		AxeWorld.spawn(320,0,460,0);
+
+		// spawn a test car
+		Car.spawn(420,0,680,0);
 
 		// ensure objects array is available to renderer (it will filter by world)
 
@@ -1232,6 +1215,14 @@
 						if(hasEquippedAxe || axeInInventory){ Axe.useOn(centerObj); return; }
 					}
 
+					// toggle reverse when in vehicle
+					if(k === 'o'){
+						if(player._inVehicle && typeof player._inVehicle.toggleReverse === 'function'){
+							player._inVehicle.toggleReverse();
+							showPickup('Reverse ' + (player._inVehicle.reverse ? 'ON' : 'OFF'));
+						}
+					}
+
 					// bracket navigation: previous/next equipped slot
 					if(k === '[' || k === ']'){
 						const dir = (k === ']') ? 1 : -1;
@@ -1330,10 +1321,24 @@
 			// gravity (positive Y is up). Use negative gravity to pull downwards.
 			const GRAV = -900; // units/s^2 (acceleration)
 			player.vel.y += GRAV * dt; // velocity affected by gravity
+			// integrate Y with basic collision resolution to avoid falling through walls
+			const prevY = player.y;
 			player.y += player.vel.y * dt; // integrate
-			// ground at y = 0 (player cannot go below 0)
-			if(player.y <= 0){ player.y = 0; player.vel.y = 0; player.onGround = true; }
-			else{ player.onGround = false; }
+			// if player's sphere intersects a wall at the new Y, try to resolve upward (standing on top)
+			if(isBlockedByWorld({ x: player.x, y: player.y, z: player.z })){
+				// attempt to nudge player up until no collision (search up to 120 units)
+				let found = false;
+				for(let off = 0; off <= 120; off += 2){
+					if(!isBlockedByWorld({ x: player.x, y: prevY + off, z: player.z })){ player.y = prevY + off; player.vel.y = 0; player.onGround = true; found = true; break; }
+				}
+				if(!found){ // cannot resolve — rollback to previous Y and stop vertical motion
+					player.y = prevY; player.vel.y = 0; player.onGround = true;
+				}
+			} else {
+				// ground at y = 0 (player cannot go below 0)
+				if(player.y <= 0){ player.y = 0; player.vel.y = 0; player.onGround = true; }
+				else{ player.onGround = false; }
+			}
 
 			// jump (space): give an upward positive impulse
 			if(keysDown.has(' ' ) || keysDown.has('space') ){
@@ -1490,7 +1495,55 @@
 			selectedId = id;
 			const obj = objects.find(o=>o.id === id);
 			if(!obj) return;
+			// update overlay info
+			selectedInfo.textContent = `${obj.name} — ${obj.description}`;
+			// add z control when selected
+			renderSelectedZControl(obj);
+			// visual highlight handled by renderer using selectedId
+			// ensure overlay visible
+		}
 
+		// render a Z slider for the selected object inside the overlay
+		function renderSelectedZControl(obj){
+			// simplified: show selected object brief info in the header selectedInfo area
+			if(!selectedInfo) return;
+			selectedInfo.style.display = '';
+			selectedInfo.textContent = `${obj.name} — z:${Math.round(obj.z||0)}`;
+		}
+
+		// helpers
+		function addRandomObject(){
+			const id = Date.now();
+			const x = player.x + (Math.random()-0.5)*400;
+			const y = 0; // place on floor
+			const z = player.z + (Math.random()*800 + 100);
+			const palette = ['#ef4444','#06b6d4','#f97316','#34d399','#a78bfa','#f59e0b'];
+			const color = palette[Math.floor(Math.random()*palette.length)];
+			const obj = {id,name:`Obj${String(id).slice(-4)}`.replace('id','Obj'),x,y,z,triangles:[],tetrahedrons:[],actions:[],isworld:false,iswall:false,color,description:'A randomly created object'};
+			// ensure name exists properly
+			obj.name = 'Obj' + (objects.length+1);
+			objects.push(obj);
+			refresh();
+			selectObject(obj.id);
+		}
+
+		function clearObjects(){
+			// keep player (first object) but clear others
+			objects = objects.filter(o=>o.isplayer);
+			selectedId = null;
+			selectedInfo.textContent = 'No selection';
+			refresh();
+		}
+
+		function centerSelected(){
+			if(!selectedId) return;
+			const obj = objects.find(o=>o.id===selectedId);
+			if(!obj) return;
+			// move selected object near player (center view)
+			obj.x = player.x;
+			obj.z = player.z + 200;
+			obj.y = 0;
+			refresh();
 			selectObject(obj.id);
 		}
 
