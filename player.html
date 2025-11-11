@@ -852,8 +852,8 @@
 						// lid: rotate verts around hinge (back top edge)
 						if(obj._lidTemplate){
 							const lid = obj._lidTemplate; const dims = obj._chestDims;
-							// hinge along the back/top edge: use back side (-hd) so lid rotates correctly
-							const hingeY = dims.h; const hingeZ = -dims.hd; // local hinge (back edge)
+							// hinge along the back/top edge: use back side (hd sign may vary) — use positive hd so lid opens on the expected axis
+							const hingeY = dims.h; const hingeZ = dims.hd; // local hinge (back edge)
 							const angle = obj.lidAngle || 0;
 							// precompute rotated verts
 							const rotated = [];
@@ -1440,6 +1440,23 @@
 				});
 				el.appendChild(row);
 			});
+
+			// add a control to open nearby chest
+			const ctrl = document.createElement('div'); ctrl.style.marginTop='8px'; ctrl.style.display='flex'; ctrl.style.justifyContent='flex-end';
+			const openBtn = document.createElement('button'); openBtn.textContent = 'Open Nearby Chest';
+			openBtn.addEventListener('click', ()=>{
+				// try center object first
+				let chest = renderer.getObjectInCenter();
+				if(!chest || !chest.name || chest.name.toLowerCase()!=='chest'){
+					// find nearest chest within 200 units
+					let nearest = null; let nd = Infinity;
+					for(const o of objects){ if(o.world !== player.world) continue; if(!o.name) continue; if(o.name.toLowerCase() !== 'chest') continue; const d = Math.hypot((o.x||0)-player.x, (o.z||0)-player.z); if(d < nd){ nd = d; nearest = o; } }
+					if(nearest && nd <= 240) chest = nearest;
+				}
+				if(chest && chest.name && chest.name.toLowerCase()==='chest'){ chest.open(); showChestUI(chest); }
+				else showPickup('No chest nearby');
+			});
+			ctrl.appendChild(openBtn); el.parentNode.appendChild(ctrl);
 		}
 
 		// Chest UI: modal to view chest contents and put items from inventory into chest
@@ -1474,26 +1491,34 @@
 				if(!chest.contents || chest.contents.length === 0) contEl.textContent = 'Empty';
 				else{
 					chest.contents.forEach((it, idx)=>{
-						const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='6px 4px';
-						row.innerHTML = `<div>${it.name}</div><div class="muted">x${it.qty}</div>`;
-						contEl.appendChild(row);
+						const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='6px 4px'; row.style.alignItems='center';
+						const left = document.createElement('div'); left.textContent = it.name;
+						const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px'; right.style.alignItems='center';
+						const input = document.createElement('input'); input.type='number'; input.min='1'; input.value='1'; input.style.width='56px';
+						const takeBtn = document.createElement('button'); takeBtn.textContent = 'Take';
+						takeBtn.addEventListener('click', ()=>{
+							const q = Math.max(0, Math.min(it.qty||0, parseInt(input.value) || 0));
+							if(q <= 0) return; transferFromChest(chest, idx, q); renderChestLists(); renderInventory(); saveState();
+						});
+						right.appendChild(input); right.appendChild(document.createTextNode('x' + (it.qty||1))); right.appendChild(takeBtn);
+						row.appendChild(left); row.appendChild(right); contEl.appendChild(row);
 					});
 				}
 				const invEl = document.getElementById('chestInventoryList'); invEl.innerHTML = '';
 				if(inventory.length === 0){ invEl.textContent = 'Inventory empty'; }
 				else{
 					inventory.forEach((it, i)=>{
-						const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='6px 4px'; row.style.cursor='pointer';
-						row.innerHTML = `<div>${it.name}</div><div class="muted">x${it.qty}</div>`;
-						row.addEventListener('click', ()=>{
-							const q = parseInt(prompt('Quantity to put into chest (max ' + (it.qty||1) + ')', '1')) || 0;
-							const qty = Math.max(0, Math.min(it.qty||1, q));
-							if(qty <= 0) return;
-							// transfer
-							transferToChest(chest, i, qty);
-							renderChestLists(); renderInventory(); saveState();
+						const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='6px 4px'; row.style.alignItems='center';
+						const left = document.createElement('div'); left.textContent = it.name;
+						const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px'; right.style.alignItems='center';
+						const input = document.createElement('input'); input.type='number'; input.min='1'; input.value='1'; input.style.width='56px';
+						const putBtn = document.createElement('button'); putBtn.textContent = 'Put';
+						putBtn.addEventListener('click', ()=>{
+							const q = Math.max(0, Math.min(it.qty||1, parseInt(input.value) || 0));
+							if(q <= 0) return; transferToChest(chest, i, q); renderChestLists(); renderInventory(); saveState();
 						});
-						invEl.appendChild(row);
+						right.appendChild(input); right.appendChild(document.createTextNode('x' + (it.qty||1))); right.appendChild(putBtn);
+						row.appendChild(left); row.appendChild(right); invEl.appendChild(row);
 					});
 				}
 			}
@@ -1513,6 +1538,20 @@
 			if(existing) existing.qty = (existing.qty||0) + qty;
 			else chest.contents.push({ id: item.id, name: item.name, qty: qty });
 			showPickup(`Put ${qty} x ${item.name} into chest`);
+			saveState(); refresh();
+		}
+
+		function transferFromChest(chest, chestIndex, qty){
+			if(!chest.contents || !chest.contents[chestIndex] || qty <= 0) return;
+			const item = chest.contents[chestIndex];
+			const takeQty = Math.min(item.qty, qty);
+			// add to inventory (merge)
+			const invExisting = inventory.find(i=>i.id === item.id);
+			if(invExisting) invExisting.qty = (invExisting.qty||0) + takeQty;
+			else inventory.push({ id: item.id, name: item.name, qty: takeQty });
+			// remove from chest
+			item.qty -= takeQty; if(item.qty <= 0) chest.contents.splice(chestIndex,1);
+			showPickup(`Took ${takeQty} x ${item.name} from chest`);
 			saveState(); refresh();
 		}
 
