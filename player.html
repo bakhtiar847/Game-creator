@@ -609,6 +609,8 @@
 
 		// place an axe in the world for pickup
 		AxeWorld.spawn(320,0,460,0);
+		// spawn a car nearby for testing (I:accelerate, K:brake, J/L:steer, O:reverse, Q:enter/exit)
+		Car.spawn(380,0,500,0, { name: 'Car', color: '#2b6f9b' });
 
 		// ensure objects array is available to renderer (it will filter by world)
 
@@ -859,8 +861,9 @@
 						// lid: rotate verts around hinge (back top edge)
 						if(obj._lidTemplate){
 							const lid = obj._lidTemplate; const dims = obj._chestDims;
-							// hinge along the back/top edge: use back side (-hd) so lid rotates along the long edge
-							const hingeY = dims.h; const hingeZ = -dims.hd; // local hinge (back edge)
+							// hinge along the lid edge: use the front/back edge depending on chest orientation
+							// use the front edge (+hd) so the lid rotates visibly upwards from the front edge
+							const hingeY = dims.h; const hingeZ = dims.hd; // local hinge (front edge)
 							const angle = obj.lidAngle || 0;
 							// precompute rotated verts
 							const rotated = [];
