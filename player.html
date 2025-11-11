@@ -99,6 +99,92 @@
 			}
 		}
 
+	// Car world object: enter/exit and simple driving controls (I accelerate, K brake, O toggle reverse, J/L steer)
+	class Car extends WorldObject {
+		constructor(data){
+			super(data);
+			this.actions = this.actions || [];
+			this.actions.push({ key:'q', name: 'enter' });
+			this.driver = null; // reference to player when occupied
+			this.reverse = false;
+			this.speed = 0; // current forward speed (units/sec)
+			this.maxSpeed = 220;
+			this.accel = 500;
+			this.brake = 800;
+			this.turnSpeed = 2.4; // radians/sec at speed
+			this.dim = { w: 120, h: 28, d: 70 };
+			// simple box-like tetrahedron decomposition for collision
+			const hw = this.dim.w/2, hy = this.dim.h/2, hd = this.dim.d/2;
+			const x = this.x, y = this.y + hy, z = this.z;
+			const p0 = { x:x-hw, y:y-hy, z:z-hd }, p1 = { x:x+hw, y:y-hy, z:z-hd }, p2 = { x:x-hw, y:y-hy, z:z+hd }, p3 = { x:x+hw, y:y-hy, z:z+hd };
+			const p4 = { x:x-hw, y:y+hy, z:z-hd }, p5 = { x:x+hw, y:y+hy, z:z-hd }, p6 = { x:x-hw, y:y+hy, z:z+hd }, p7 = { x:x+hw, y:y+hy, z:z+hd };
+			this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
+			this.isworld = true; this.iswall = true;
+		}
+
+		enter(){
+			if(this.driver) return; // already occupied
+			this.driver = { id: 'player' };
+			player._inVehicle = this;
+			// snap player to car
+			player.x = this.x; player.y = this.y + 8; player.z = this.z;
+			player.vel = { x:0, y:0, z:0 };
+			player.onGround = false;
+			showPickup('Entered car');
+		}
+
+		exit(){
+			if(!this.driver) return;
+			this.driver = null;
+			player._inVehicle = null;
+			// place player behind car
+			const rot = this.rotY || 0;
+			const backX = this.x - Math.sin(rot) * (this.dim.d/2 + player.radius + 6);
+			const backZ = this.z - Math.cos(rot) * (this.dim.d/2 + player.radius + 6);
+			player.x = backX; player.z = backZ; player.y = Math.max(0, this.y + 4);
+			showPickup('Exited car');
+		}
+
+		toggleReverse(){ this.reverse = !this.reverse; }
+
+		update(dt){
+			// update physics when occupied
+			if(this.driver){
+				// steering
+				if(keysDown.has('j')){ this.rotY = (this.rotY||0) - this.turnSpeed * dt; }
+				if(keysDown.has('l')){ this.rotY = (this.rotY||0) + this.turnSpeed * dt; }
+				// throttle/brake
+				if(keysDown.has('i')){ // accelerate
+					const dir = this.reverse ? -1 : 1;
+					this.speed += this.accel * dt * dir;
+				} else if(keysDown.has('k')){ // brake
+					if(this.speed > 0) this.speed = Math.max(0, this.speed - this.brake * dt);
+					else this.speed = Math.min(0, this.speed + this.brake * dt);
+				} else {
+					// natural friction
+					this.speed *= Math.max(0, 1 - 2.0 * dt);
+				}
+				// clamp
+				this.speed = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.speed));
+				// update position based on heading
+				const forward = Math.sin(this.rotY || 0);
+				const forwardZ = Math.cos(this.rotY || 0);
+				this.x += forward * this.speed * dt;
+				this.z += forwardZ * this.speed * dt;
+				// keep player glued to car
+				player.x = this.x; player.z = this.z; player.y = this.y + 8; player.rotY = this.rotY || 0;
+				// update collision tetrahedrons to follow car position
+				const hw = this.dim.w/2, hy = this.dim.h/2, hd = this.dim.d/2;
+				const x = this.x, y = this.y + hy, z = this.z;
+				const p0 = { x:x-hw, y:y-hy, z:z-hd }, p1 = { x:x+hw, y:y-hy, z:z-hd }, p2 = { x:x-hw, y:y-hy, z:z+hd }, p3 = { x:x+hw, y:y-hy, z:z+hd };
+				const p4 = { x:x-hw, y:y+hy, z:z-hd }, p5 = { x:x+hw, y:y+hy, z:z-hd }, p6 = { x:x-hw, y:y+hy, z:z+hd }, p7 = { x:x+hw, y:y+hy, z:z+hd };
+				this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
+			}
+		}
+
+		static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const c = new Car({ id, name:'Car', x,y,z, color:'#334155', world, isworld:true, iswall:true }); objects.push(c); return c; }
+	}
+
 		class InventoryItem {
 			constructor(id, name, qty = 1){ this.id = id; this.name = name; this.qty = qty; }
 		}
@@ -436,14 +522,48 @@
 				for(let i=0;i<segments;i++){
 					const tNorm = i/(segments-1);
 					const x = -hw + tNorm * w;
-					const arc = Math.sin(Math.PI * tNorm) * 20; // lid bulge
-					lid.verts.push({x:x,y:h+arc,z:-hd}); // back
-					lid.verts.push({x:x,y:h+arc,z:hd});  // front
+					const arc = Math.sin(Math.PI * tNorm) * 12; // lid bulge (reduced)
+					// build lid with thickness: top and bottom verts for each side (back/front)
+					const lidTopY = h + arc + 4; // top surface y
+					const lidBotY = h + arc - 4; // bottom surface y (thickness = 8)
+					// back/top, front/top, back/bot, front/bot
+					lid.verts.push({x:x,y:lidTopY,z:-hd}); // a: top back
+					lid.verts.push({x:x,y:lidTopY,z:hd});  // b: top front
+					lid.verts.push({x:x,y:lidBotY,z:-hd}); // c: bot back
+					lid.verts.push({x:x,y:lidBotY,z:hd});  // d: bot front
 				}
+				// create indices for top surface and bottom surface and side faces
 				for(let i=0;i<segments-1;i++){
-					const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
-					lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[d]]);
-					lid.indices.push([lid.verts[a], lid.verts[d], lid.verts[c]]);
+					const a = i*4, b = i*4+1, c = i*4+2, d = i*4+3; // current segment verts
+					const na = (i+1)*4, nb = (i+1)*4+1, nc = (i+1)*4+2, nd = (i+1)*4+3; // next segment verts
+					// top surface (a,b,nb) and (a,nb,na)
+					lid.indices.push([lid.verts[a], lid.verts[b], lid.verts[nb]]);
+					lid.indices.push([lid.verts[a], lid.verts[nb], lid.verts[na]]);
+					// bottom surface (c,nc,nd) and (c,nd,d) (note winding for correct normal)
+					lid.indices.push([lid.verts[c], lid.verts[nc], lid.verts[nd]]);
+					lid.indices.push([lid.verts[c], lid.verts[nd], lid.verts[d]]);
+					// side faces connecting top and bottom at back edge
+					lid.indices.push([lid.verts[a], lid.verts[c], lid.verts[nc]]);
+					lid.indices.push([lid.verts[a], lid.verts[nc], lid.verts[na]]);
+					// side faces connecting top and bottom at front edge
+					lid.indices.push([lid.verts[b], lid.verts[nb], lid.verts[nd]]);
+					lid.indices.push([lid.verts[b], lid.verts[nd], lid.verts[d]]);
+				}
+				// add simple iron bars on top (3 bars across width) — small rectangular strips
+				const bars = 3;
+				for(let bi=0; bi<bars; bi++){
+					const tNorm = (bi+1)/(bars+1);
+					const bx = -hw + tNorm * w;
+					const by = h + 12 + 4; // slightly above lid top
+					const bz = -hd + 4; const bz2 = hd - 4;
+					// four verts for bar (two ends, top surface)
+					const v0 = {x:bx-6,y:by,z:bz}; const v1 = {x:bx+6,y:by,z:bz};
+					const v2 = {x:bx-6,y:by,z:bz2}; const v3 = {x:bx+6,y:by,z:bz2};
+					const idxBase = lid.verts.length;
+					lid.verts.push(v0,v1,v2,v3);
+					// two triangles forming the bar top
+					lid.indices.push([lid.verts[idxBase], lid.verts[idxBase+1], lid.verts[idxBase+3]]);
+					lid.indices.push([lid.verts[idxBase], lid.verts[idxBase+3], lid.verts[idxBase+2]]);
 				}
 
 				obj._baseTris = tris;
@@ -528,6 +648,9 @@
 
 		// place an axe in the world for pickup
 		AxeWorld.spawn(320,0,460,0);
+
+		// spawn a test car
+		Car.spawn(420,0,680,0);
 
 		// ensure objects array is available to renderer (it will filter by world)
 
@@ -1092,6 +1215,14 @@
 						if(hasEquippedAxe || axeInInventory){ Axe.useOn(centerObj); return; }
 					}
 
+					// toggle reverse when in vehicle
+					if(k === 'o'){
+						if(player._inVehicle && typeof player._inVehicle.toggleReverse === 'function'){
+							player._inVehicle.toggleReverse();
+							showPickup('Reverse ' + (player._inVehicle.reverse ? 'ON' : 'OFF'));
+						}
+					}
+
 					// bracket navigation: previous/next equipped slot
 					if(k === '[' || k === ']'){
 						const dir = (k === ']') ? 1 : -1;
@@ -1190,10 +1321,24 @@
 			// gravity (positive Y is up). Use negative gravity to pull downwards.
 			const GRAV = -900; // units/s^2 (acceleration)
 			player.vel.y += GRAV * dt; // velocity affected by gravity
+			// integrate Y with basic collision resolution to avoid falling through walls
+			const prevY = player.y;
 			player.y += player.vel.y * dt; // integrate
-			// ground at y = 0 (player cannot go below 0)
-			if(player.y <= 0){ player.y = 0; player.vel.y = 0; player.onGround = true; }
-			else{ player.onGround = false; }
+			// if player's sphere intersects a wall at the new Y, try to resolve upward (standing on top)
+			if(isBlockedByWorld({ x: player.x, y: player.y, z: player.z })){
+				// attempt to nudge player up until no collision (search up to 120 units)
+				let found = false;
+				for(let off = 0; off <= 120; off += 2){
+					if(!isBlockedByWorld({ x: player.x, y: prevY + off, z: player.z })){ player.y = prevY + off; player.vel.y = 0; player.onGround = true; found = true; break; }
+				}
+				if(!found){ // cannot resolve — rollback to previous Y and stop vertical motion
+					player.y = prevY; player.vel.y = 0; player.onGround = true;
+				}
+			} else {
+				// ground at y = 0 (player cannot go below 0)
+				if(player.y <= 0){ player.y = 0; player.vel.y = 0; player.onGround = true; }
+				else{ player.onGround = false; }
+			}
 
 			// jump (space): give an upward positive impulse
 			if(keysDown.has(' ' ) || keysDown.has('space') ){
