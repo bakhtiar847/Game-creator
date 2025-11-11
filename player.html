@@ -31,96 +31,24 @@
 		@media (max-width:600px){.overlay{position:fixed;left:8px;right:8px;top:auto;bottom:8px;width:auto}}
 	</style>
 </head>
-<body>
-	<div class="container">
-		<header>
-			<h1>Player — Objects Preview</h1>
-			<div class="toolbar"></div>
-			<div id="selectedInfo" style="display:none;margin-left:12px;color:var(--muted)"></div>
-		</header>
+<script>
+		// small runtime helpers & base classes that need to exist before further declarations
+		class InventoryItem { constructor(id,name,qty=1){ this.id = id; this.name = name; this.qty = qty; } }
+		let objects = [ { id:1, name:'Player', x:300, y:100, z:200, triangles:[], tetrahedrons:[], actions:[], isplayer:true } ];
 
-		<main>
-			<section class="stage" id="stage" aria-label="Game stage">
-				<canvas id="canvas" aria-label="3D canvas renderer"></canvas>
-				<div class="grid" aria-hidden="true"></div>
-			</section>
-		</main>
+		function loadTexture(obj, src){ const img = new Image(); img.crossOrigin='anonymous'; img.onload = ()=>{ obj.texture = img; renderer && renderer.render(); }; img.onerror = ()=>{ console.warn('Failed to load texture', src); }; img.src = src; return img; }
 
+		for(const o of objects){ if(o.textureSrc) loadTexture(o, o.textureSrc); }
 
+		objects = objects.map(o=> new GameObject(o));
+		for(const o of objects) if(typeof o.world === 'undefined') o.world = 0;
 
-		<!-- pause menu -->
-		<div id="pauseMenu" style="display:none; position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(2,6,23,0.9);color:#e6eef6;padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);z-index:40;min-width:260px;text-align:center">
-			<h3 style="margin:0 0 8px 0">Paused</h3>
-			<div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px">
-				<button id="pauseInventoryBtn">Inventory</button>
-				<button id="resumeBtn">Resume</button>
-				<button id="saveBtn">Save</button>
-			</div>
-			<div id="pauseInfo" class="muted">Press Esc to resume.</div>
-		</div>
+		class WorldObject extends GameObject { constructor(data){ super(data); this.world = (data && data.world) || 0; } }
 
-		<!-- inventory panel (used by pause menu) -->
-		<div id="inventoryPanel" style="display:none; position:fixed;right:18px;top:80px;background:rgba(2,6,23,0.9);color:#e6eef6;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);z-index:45;min-width:220px">
-			<h4 style="margin:0 0 8px 0">Inventory</h4>
-			<div id="inventoryList" style="max-height:300px;overflow:auto"></div>
-			<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-				<button id="putDownBtn">Put Down</button>
-				<button id="closeInventoryBtn">Close</button>
-			</div>
-		</div>
-
-		<footer>
-			This demo renders an objects array and shows an overlay with details. Open this file in a browser to interact.
-		</footer>
-	</div>
-
-	<script>
-		// Objects now have richer structure:
-		// { id, name, x,y,z (origin), triangles: [{p1:{x,y,z}, p2, p3}], tetrahedrons: [{a,b,c,d}], actions: [{key,name}], flags: isplayer,isworld,iswall }
-
-		// Lightweight classes for game objects and inventory items
-		class GameObject {
-			constructor(data){
-				Object.assign(this, data);
-				this.triangles = this.triangles || [];
-				this.tetrahedrons = this.tetrahedrons || [];
-				this.actions = this.actions || [];
-				this.isplayer = !!this.isplayer;
-				this.isworld = !!this.isworld;
-				this.iswall = !!this.iswall;
-				// runtime/visual fields
-				this.texture = this.texture || null;
-				this._baseTris = this._baseTris || null;
-				this._lidTemplate = this._lidTemplate || null;
-				this._chestDims = this._chestDims || null;
-				this.opened = !!this.opened;
-				this.lidAngle = this.lidAngle || 0;
-				this.lidTarget = this.lidTarget || 0;
+				this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
+				this.isworld = true; this.iswall = true;
 			}
-		}
 
-	// Car world object: enter/exit and simple driving controls (I accelerate, K brake, O toggle reverse, J/L steer)
-	class Car extends WorldObject {
-		constructor(data){
-			super(data);
-			this.actions = this.actions || [];
-			this.actions.push({ key:'q', name: 'enter' });
-			this.driver = null; // reference to player when occupied
-			this.reverse = false;
-			this.speed = 0; // current forward speed (units/sec)
-			this.maxSpeed = 220;
-			this.accel = 500;
-			this.brake = 800;
-			this.turnSpeed = 2.4; // radians/sec at speed
-			this.dim = { w: 120, h: 28, d: 70 };
-			// simple box-like tetrahedron decomposition for collision
-			const hw = this.dim.w/2, hy = this.dim.h/2, hd = this.dim.d/2;
-			const x = this.x, y = this.y + hy, z = this.z;
-			const p0 = { x:x-hw, y:y-hy, z:z-hd }, p1 = { x:x+hw, y:y-hy, z:z-hd }, p2 = { x:x-hw, y:y-hy, z:z+hd }, p3 = { x:x+hw, y:y-hy, z:z+hd };
-			const p4 = { x:x-hw, y:y+hy, z:z-hd }, p5 = { x:x+hw, y:y+hy, z:z-hd }, p6 = { x:x-hw, y:y+hy, z:z+hd }, p7 = { x:x+hw, y:y+hy, z:z+hd };
-			this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
-			this.isworld = true; this.iswall = true;
-		}
 
 		enter(){
 			if(this.driver) return; // already occupied
@@ -176,91 +104,7 @@
 				// update collision tetrahedrons to follow car position
 				const hw = this.dim.w/2, hy = this.dim.h/2, hd = this.dim.d/2;
 				const x = this.x, y = this.y + hy, z = this.z;
-				const p0 = { x:x-hw, y:y-hy, z:z-hd }, p1 = { x:x+hw, y:y-hy, z:z-hd }, p2 = { x:x-hw, y:y-hy, z:z+hd }, p3 = { x:x+hw, y:y-hy, z:z+hd };
-				const p4 = { x:x-hw, y:y+hy, z:z-hd }, p5 = { x:x+hw, y:y+hy, z:z-hd }, p6 = { x:x-hw, y:y+hy, z:z+hd }, p7 = { x:x+hw, y:y+hy, z:z+hd };
-				this.tetrahedrons = [ {a:p0,b:p1,c:p2,d:p4}, {a:p1,b:p2,c:p3,d:p7}, {a:p1,b:p4,c:p5,d:p7}, {a:p2,b:p4,c:p6,d:p7}, {a:p1,b:p2,c:p4,d:p7} ];
-			}
-		}
-
-		static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const c = new Car({ id, name:'Car', x,y,z, color:'#334155', world, isworld:true, iswall:true }); objects.push(c); return c; }
-	}
-
-		class InventoryItem {
-			constructor(id, name, qty = 1){ this.id = id; this.name = name; this.qty = qty; }
-		}
-
-		let objects = [
-			{
-				id:1,
-				name:'Player',
-				x:300,y:100,z:200,
-				triangles:[],
-				tetrahedrons:[],
-				actions:[],
-				isplayer:true
-			}
-		];
-
-		// Texture loader: attach an Image to object.texture when textureSrc is present
-		function loadTexture(obj, src){
-			const img = new Image();
-			img.crossOrigin = 'anonymous';
-			img.onload = ()=>{ obj.texture = img; renderer && renderer.render(); };
-			img.onerror = ()=>{ console.warn('Failed to load texture', src); };
-			img.src = src;
-			return img;
-		}
-
-		// auto-load textures only when explicitly requested via textureSrc or isSprite flag
-		for(const o of objects){ if(o.textureSrc) loadTexture(o, o.textureSrc); }
-
-		// (Chest mesh builder moved into Chest class below)
-
-		// Convert plain object literals to GameObject instances
-		objects = objects.map(o => new GameObject(o));
-		// ensure each object has a world coordinate (default world 0)
-		for(const o of objects) if(typeof o.world === 'undefined') o.world = 0;
-
-		// WorldObject base class (derives from GameObject)
-		class WorldObject extends GameObject {
-			constructor(data){
-				super(data);
-				this.world = (data && data.world) || 0;
-			}
-		}
-
-		// abstract-ish Tree1 class derived from WorldObject
-		class Tree1 extends WorldObject {
-			constructor(data){ super(data); }
-			// spawn a tree at x,z in given world
-			static spawn(x,z, world=0){
-				const id = Date.now() + Math.floor(Math.random()*1000);
-				const t = new WorldObject({ id, name: 'Tree', x:x, y:0, z:z, color:'#8B5A2B', actions:[{key:'q',name:'cut'}], world });
-				// trunk mesh + canopy tets
-				buildCylinderMesh(t, 6, 40, 18);
-				// add simple canopy tetrahedrons above trunk
-				t.tetrahedrons = [
-					{a:{x:x-20,y:40,z:z-20},b:{x:x+20,y:40,z:z-20},c:{x:x,y:80,z:z},d:{x:x,y:55,z:z-40}},
-					{a:{x:x-20,y:45,z:z+20},b:{x:x+20,y:45,z:z+20},c:{x:x,y:85,z:z},d:{x:x,y:60,z:z+40}}
-				];
-				objects.push(t);
-				return t;
-			}
-		}
-
-		// Ladder class
-		class Ladder extends WorldObject {
-			constructor(data){
-				super(data);
-				this.actions = this.actions || [];
-				// allow both Q (default interact) and C to climb
-				this.actions.push({key:'c', name:'climb'});
-				this.actions.push({key:'q', name:'climb'});
-				this.climbHeight = data && typeof data.climbHeight !== 'undefined' ? data.climbHeight : 60;
-			}
-
-			static spawn(x,y,z,world=0){
-				const id = Date.now() + Math.floor(Math.random()*1000);
+	
 				const l = new Ladder({ id, name:'Ladder', x:x, y:y, z:z, color:'#c68642', world, isworld:true, iswall:true });
 				// simple thin tetrahedron to represent ladder
 				l.tetrahedrons = [ { a:{x:x-6,y:y,z:z-6}, b:{x:x+6,y:y,z:z-6}, c:{x:x+6,y:y+80,z:z+6}, d:{x:x-6,y:y+80,z:z+6} } ];
@@ -582,6 +426,59 @@
 				obj.lidAngle = obj.lidAngle || 0;
 				obj.lidTarget = obj.lidTarget || 0;
 			}
+					// show a modal to deposit items from inventory into a chest
+		showChestDepositDialog(){
+			if(!this) return;
+			// create modal
+			let modal = document.getElementById('chestDepositModal');
+			if(modal) modal.remove();
+			modal = document.createElement('div'); modal.id = 'chestDepositModal';
+			modal.style.position = 'fixed'; modal.style.left = '50%'; modal.style.top = '50%'; modal.style.transform = 'translate(-50%,-50%)';
+			modal.style.background = 'rgba(2,6,23,0.95)'; modal.style.color = '#e6eef6'; modal.style.padding = '14px'; modal.style.borderRadius = '10px';
+			modal.style.border = '1px solid rgba(255,255,255,0.06)'; modal.style.zIndex = 200; modal.style.minWidth = '320px';
+			const title = document.createElement('div'); title.style.fontWeight='700'; title.style.marginBottom='8px'; title.textContent = 'Put items into chest'; modal.appendChild(title);
+			const info = document.createElement('div'); info.style.marginBottom='8px'; info.style.color='#94a3b8'; info.textContent = `Chest contents: ${this.contents && this.contents.length? this.contents.map(c=>c.id+':'+c.qty).join(', '): 'empty'}`; modal.appendChild(info);
+			const list = document.createElement('div'); list.style.maxHeight='220px'; list.style.overflow='auto'; list.style.marginBottom='8px';
+			// for each inventory item, show a row with input number
+			inventory.forEach((it, idx)=>{
+				const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px 0';
+				const label = document.createElement('div'); label.textContent = `${it.name} (x${it.qty||1})`;
+				const ctrl = document.createElement('input'); ctrl.type='number'; ctrl.min='0'; ctrl.max=String(it.qty||0); ctrl.value='0'; ctrl.style.width='64px'; ctrl.dataset.idx = idx;
+				row.appendChild(label); row.appendChild(ctrl); list.appendChild(row);
+			});
+			modal.appendChild(list);
+			const btnRow = document.createElement('div'); btnRow.style.display='flex'; btnRow.style.justifyContent='flex-end'; btnRow.style.gap='8px';
+			const putBtn = document.createElement('button'); putBtn.textContent='Put selected';
+			const doneBtn = document.createElement('button'); doneBtn.textContent='Done';
+			btnRow.appendChild(putBtn); btnRow.appendChild(doneBtn); modal.appendChild(btnRow);
+			document.body.appendChild(modal);
+
+			putBtn.addEventListener('click', ()=>{
+				// iterate inputs and transfer amounts
+				const inputs = modal.querySelectorAll('input[type=number]');
+				let moved = 0;
+				inputs.forEach(inp=>{
+					const amt = Math.max(0, Math.floor(Number(inp.value)||0));
+					if(amt <= 0) return;
+					const invIdx = Number(inp.dataset.idx);
+					const item = inventory[invIdx];
+					if(!item) return;
+					const take = Math.min(amt, item.qty||0);
+					if(take <= 0) return;
+					// remove from inventory
+					item.qty = (item.qty||0) - take;
+					// add to chest.contents (merge)
+					const existing = this.contents.find(c=>c.id === item.id);
+					if(existing) existing.qty += take; else this.contents.push({ id: item.id, qty: take });
+					moved += take;
+				});
+				// cleanup zero-qty inventory entries
+				for(let i=inventory.length-1;i>=0;i--){ if(inventory[i].qty <= 0) inventory.splice(i,1); }
+				if(moved > 0){ showPickup(`Placed ${moved} item(s) into chest`); saveState(); refresh(); info.textContent = `Chest contents: ${this.contents.map(c=>c.id+':'+c.qty).join(', ')}`; }
+			});
+
+			doneBtn.addEventListener('click', ()=>{ modal.remove(); });
+		}
 			open(){
 				if(!this.opened){
 					this.opened = true; this.lidTarget = -Math.PI * 0.65;
@@ -1470,60 +1367,6 @@
 			});
 		}
 
-		// show a modal to deposit items from inventory into a chest
-		function showChestDepositDialog(chest){
-			if(!chest) return;
-			// create modal
-			let modal = document.getElementById('chestDepositModal');
-			if(modal) modal.remove();
-			modal = document.createElement('div'); modal.id = 'chestDepositModal';
-			modal.style.position = 'fixed'; modal.style.left = '50%'; modal.style.top = '50%'; modal.style.transform = 'translate(-50%,-50%)';
-			modal.style.background = 'rgba(2,6,23,0.95)'; modal.style.color = '#e6eef6'; modal.style.padding = '14px'; modal.style.borderRadius = '10px';
-			modal.style.border = '1px solid rgba(255,255,255,0.06)'; modal.style.zIndex = 200; modal.style.minWidth = '320px';
-			const title = document.createElement('div'); title.style.fontWeight='700'; title.style.marginBottom='8px'; title.textContent = 'Put items into chest'; modal.appendChild(title);
-			const info = document.createElement('div'); info.style.marginBottom='8px'; info.style.color='#94a3b8'; info.textContent = `Chest contents: ${chest.contents && chest.contents.length? chest.contents.map(c=>c.id+':'+c.qty).join(', '): 'empty'}`; modal.appendChild(info);
-			const list = document.createElement('div'); list.style.maxHeight='220px'; list.style.overflow='auto'; list.style.marginBottom='8px';
-			// for each inventory item, show a row with input number
-			inventory.forEach((it, idx)=>{
-				const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px 0';
-				const label = document.createElement('div'); label.textContent = `${it.name} (x${it.qty||1})`;
-				const ctrl = document.createElement('input'); ctrl.type='number'; ctrl.min='0'; ctrl.max=String(it.qty||0); ctrl.value='0'; ctrl.style.width='64px'; ctrl.dataset.idx = idx;
-				row.appendChild(label); row.appendChild(ctrl); list.appendChild(row);
-			});
-			modal.appendChild(list);
-			const btnRow = document.createElement('div'); btnRow.style.display='flex'; btnRow.style.justifyContent='flex-end'; btnRow.style.gap='8px';
-			const putBtn = document.createElement('button'); putBtn.textContent='Put selected';
-			const doneBtn = document.createElement('button'); doneBtn.textContent='Done';
-			btnRow.appendChild(putBtn); btnRow.appendChild(doneBtn); modal.appendChild(btnRow);
-			document.body.appendChild(modal);
-
-			putBtn.addEventListener('click', ()=>{
-				// iterate inputs and transfer amounts
-				const inputs = modal.querySelectorAll('input[type=number]');
-				let moved = 0;
-				inputs.forEach(inp=>{
-					const amt = Math.max(0, Math.floor(Number(inp.value)||0));
-					if(amt <= 0) return;
-					const invIdx = Number(inp.dataset.idx);
-					const item = inventory[invIdx];
-					if(!item) return;
-					const take = Math.min(amt, item.qty||0);
-					if(take <= 0) return;
-					// remove from inventory
-					item.qty = (item.qty||0) - take;
-					// add to chest.contents (merge)
-					const existing = chest.contents.find(c=>c.id === item.id);
-					if(existing) existing.qty += take; else chest.contents.push({ id: item.id, qty: take });
-					moved += take;
-				});
-				// cleanup zero-qty inventory entries
-				for(let i=inventory.length-1;i>=0;i--){ if(inventory[i].qty <= 0) inventory.splice(i,1); }
-				if(moved > 0){ showPickup(`Placed ${moved} item(s) into chest`); saveState(); refresh(); info.textContent = `Chest contents: ${chest.contents.map(c=>c.id+':'+c.qty).join(', ')}`; }
-			});
-
-			doneBtn.addEventListener('click', ()=>{ modal.remove(); });
-		}
-
 		// save/load state to cookies
 		function saveState(){
 			try{
@@ -1563,55 +1406,7 @@
 			selectedId = id;
 			const obj = objects.find(o=>o.id === id);
 			if(!obj) return;
-			// update overlay info
-			selectedInfo.textContent = `${obj.name} — ${obj.description}`;
-			// add z control when selected
-			renderSelectedZControl(obj);
-			// visual highlight handled by renderer using selectedId
-			// ensure overlay visible
-		}
 
-		// render a Z slider for the selected object inside the overlay
-		function renderSelectedZControl(obj){
-			// simplified: show selected object brief info in the header selectedInfo area
-			if(!selectedInfo) return;
-			selectedInfo.style.display = '';
-			selectedInfo.textContent = `${obj.name} — z:${Math.round(obj.z||0)}`;
-		}
-
-		// helpers
-		function addRandomObject(){
-			const id = Date.now();
-			const x = player.x + (Math.random()-0.5)*400;
-			const y = 0; // place on floor
-			const z = player.z + (Math.random()*800 + 100);
-			const palette = ['#ef4444','#06b6d4','#f97316','#34d399','#a78bfa','#f59e0b'];
-			const color = palette[Math.floor(Math.random()*palette.length)];
-			const obj = {id,name:`Obj${String(id).slice(-4)}`.replace('id','Obj'),x,y,z,triangles:[],tetrahedrons:[],actions:[],isworld:false,iswall:false,color,description:'A randomly created object'};
-			// ensure name exists properly
-			obj.name = 'Obj' + (objects.length+1);
-			objects.push(obj);
-			refresh();
-			selectObject(obj.id);
-		}
-
-		function clearObjects(){
-			// keep player (first object) but clear others
-			objects = objects.filter(o=>o.isplayer);
-			selectedId = null;
-			selectedInfo.textContent = 'No selection';
-			refresh();
-		}
-
-		function centerSelected(){
-			if(!selectedId) return;
-			const obj = objects.find(o=>o.id===selectedId);
-			if(!obj) return;
-			// move selected object near player (center view)
-			obj.x = player.x;
-			obj.z = player.z + 200;
-			obj.y = 0;
-			refresh();
 			selectObject(obj.id);
 		}
 
