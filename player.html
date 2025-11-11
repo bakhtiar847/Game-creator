@@ -482,23 +482,10 @@
 						this.opened = true; this.lidTarget = -Math.PI * 0.65;
 						// give sample gold once when first opened (legacy behavior)
 						if(!this.collected){ this.collected = true; const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new InventoryItem('gold','Gold',1)); showPickup('Picked up Gold'); saveState(); }
+						// show chest GUI
+						showChestUI(this);
 					} else {
-						// closing: ask user for initial contents if none present
-						this.opened = false; this.lidTarget = 0;
-						if(!this.contents || this.contents.length === 0){
-							const resp = prompt('Enter chest contents as item:qty, comma separated. Example: gold:2, wood:3');
-							if(resp){
-								const arr = resp.split(',').map(s=>s.trim()).filter(Boolean);
-								this.contents = [];
-								for(const e of arr){
-									const parts = e.split(':').map(x=>x.trim());
-									const id = parts[0] || 'item'; const qty = parseInt(parts[1]) || 1;
-									const name = id.charAt(0).toUpperCase() + id.slice(1);
-									this.contents.push({ id, name, qty });
-								}
-								showPickup('Chest contents set'); saveState();
-							}
-						}
+						this.opened = false; this.lidTarget = 0; hideChestUI(); saveState();
 					}
 				}
 
@@ -1453,6 +1440,80 @@
 				});
 				el.appendChild(row);
 			});
+		}
+
+		// Chest UI: modal to view chest contents and put items from inventory into chest
+		function showChestUI(chest){
+			let panel = document.getElementById('chestPanel');
+			if(!panel){
+				panel = document.createElement('div'); panel.id = 'chestPanel';
+				panel.style.position = 'fixed'; panel.style.left = '50%'; panel.style.top = '50%'; panel.style.transform = 'translate(-50%,-50%)';
+				panel.style.background = 'rgba(2,6,23,0.95)'; panel.style.color = '#e6eef6'; panel.style.padding = '12px'; panel.style.borderRadius = '10px';
+				panel.style.border = '1px solid rgba(255,255,255,0.06)'; panel.style.zIndex = 90; panel.style.minWidth = '360px';
+				panel.innerHTML = `
+					<div style="display:flex;justify-content:space-between;align-items:center"><strong id="chestTitle">Chest</strong><div><button id="chestCloseBtn">Close</button></div></div>
+					<div style="display:flex;gap:12px;margin-top:8px">
+						<div style="flex:1">
+							<div style="font-size:13px;color:#94a3b8;margin-bottom:6px">Chest Contents</div>
+							<div id="chestContentsList" style="max-height:180px;overflow:auto;padding:6px;background:rgba(255,255,255,0.02);border-radius:6px"></div>
+						</div>
+						<div style="width:220px;flex:0 0 220px">
+							<div style="font-size:13px;color:#94a3b8;margin-bottom:6px">Inventory (click to Put In)</div>
+							<div id="chestInventoryList" style="max-height:240px;overflow:auto;padding:6px;background:rgba(255,255,255,0.02);border-radius:6px"></div>
+						</div>
+					</div>
+				`;
+				document.body.appendChild(panel);
+				panel.querySelector('#chestCloseBtn').addEventListener('click', ()=>{ chest.open(); });
+			}
+			panel.style.display = '';
+			document.getElementById('chestTitle').textContent = `Chest (${chest.id})`;
+			// render chest contents and inventory
+			function renderChestLists(){
+				const contEl = document.getElementById('chestContentsList'); contEl.innerHTML = '';
+				if(!chest.contents || chest.contents.length === 0) contEl.textContent = 'Empty';
+				else{
+					chest.contents.forEach((it, idx)=>{
+						const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='6px 4px';
+						row.innerHTML = `<div>${it.name}</div><div class="muted">x${it.qty}</div>`;
+						contEl.appendChild(row);
+					});
+				}
+				const invEl = document.getElementById('chestInventoryList'); invEl.innerHTML = '';
+				if(inventory.length === 0){ invEl.textContent = 'Inventory empty'; }
+				else{
+					inventory.forEach((it, i)=>{
+						const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='6px 4px'; row.style.cursor='pointer';
+						row.innerHTML = `<div>${it.name}</div><div class="muted">x${it.qty}</div>`;
+						row.addEventListener('click', ()=>{
+							const q = parseInt(prompt('Quantity to put into chest (max ' + (it.qty||1) + ')', '1')) || 0;
+							const qty = Math.max(0, Math.min(it.qty||1, q));
+							if(qty <= 0) return;
+							// transfer
+							transferToChest(chest, i, qty);
+							renderChestLists(); renderInventory(); saveState();
+						});
+						invEl.appendChild(row);
+					});
+				}
+			}
+			renderChestLists();
+		}
+
+		function hideChestUI(){ const panel = document.getElementById('chestPanel'); if(panel) panel.style.display = 'none'; }
+
+		function transferToChest(chest, inventoryIndex, qty){
+			if(!inventory[inventoryIndex] || qty <= 0) return;
+			const item = inventory[inventoryIndex];
+			// remove from inventory
+			item.qty -= qty; if(item.qty <= 0) inventory.splice(inventoryIndex,1);
+			// add/merge into chest contents
+			chest.contents = chest.contents || [];
+			const existing = chest.contents.find(c=>c.id === item.id);
+			if(existing) existing.qty = (existing.qty||0) + qty;
+			else chest.contents.push({ id: item.id, name: item.name, qty: qty });
+			showPickup(`Put ${qty} x ${item.name} into chest`);
+			saveState(); refresh();
 		}
 
 		// save/load state to cookies
