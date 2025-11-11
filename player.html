@@ -1252,6 +1252,45 @@
 			player.rotY = camera.rotY || 0;
 			player.pitch = camera.rotX || 0;
 
+			// if player is mounted in a car, drive the car instead of walking
+			if(player._inVehicle){
+				const car = objects.find(o=>o.id===player._inVehicle);
+				if(!car){ player._inVehicle = null; }
+				else {
+					// throttle/brake
+					const maxSpeed = car.maxSpeed || 320; const accel = car.accel || 420;
+					if(keysDown.has('i')) car.speedForward = Math.min(maxSpeed, (car.speedForward||0) + accel * dt);
+					if(keysDown.has('k')) car.speedForward = Math.max(0, (car.speedForward||0) - accel * dt * 1.5);
+					// steering
+					const steerAmt = car.steerSpeed || 2.8;
+					if(keysDown.has('j')) car.rotY -= steerAmt * dt * Math.max(0.1, Math.abs((car.speedForward||0)/maxSpeed));
+					if(keysDown.has('l')) car.rotY += steerAmt * dt * Math.max(0.1, Math.abs((car.speedForward||0)/maxSpeed));
+					// update position with simple forward motion and basic collision test
+					const dir = car._reverse ? -1 : 1;
+					const vx = Math.sin(car.rotY || 0) * (car.speedForward||0) * dt * dir;
+					const vz = Math.cos(car.rotY || 0) * (car.speedForward||0) * dt * dir;
+					const desiredCarPos = { x: car.x + vx, y: car.y, z: car.z + vz };
+					// approximate car radius for collision
+					const savedPlayerRadius = player.radius;
+					player.radius = Math.max(car._dims.hx, car._dims.hz) + 8;
+					let blocked = false;
+					for(const obj of objects){
+						if(obj.id === car.id) continue;
+						if(obj.world !== car.world) continue;
+						if(!(obj.isworld || obj.iswall)) continue;
+						if(!obj.tetrahedrons) continue;
+						for(const tet of obj.tetrahedrons){ if(sphereIntersectsTetra(desiredCarPos, player.radius, tet)){ blocked = true; break; } }
+						if(blocked) break;
+					}
+					if(!blocked){ car.x = desiredCarPos.x; car.z = desiredCarPos.z; }
+					// restore radius
+					player.radius = savedPlayerRadius;
+					// attach player to car
+					player.x = car.x; player.z = car.z; player.y = car.y + 14; player.rotY = car.rotY;
+					renderer.render(); requestAnimationFrame(physicsStep); return;
+				}
+			}
+
 			// movement vector in local space
 			let mvx=0, mvz=0;
 			if(keysDown.has('w')) mvz += 1;
@@ -1268,8 +1307,9 @@
 			const worldDX = forwardX * mvz + rightX * mvx;
 			const worldDZ = forwardZ * mvz + rightZ * mvx;
 
-			// desired new position (horizontal)
+			// desired new position (horizontal) — save previous position for collision resolution
 			const speed = player.speed;
+			const prevPos = { x: player.x, y: player.y, z: player.z };
 			const desired = {x: player.x + worldDX * speed * dt, y: player.y, z: player.z + worldDZ * speed * dt};
 
 			// check horizontal collision by testing player's origin point at desired pos against world/wall tetrahedrons
@@ -1285,6 +1325,19 @@
 			// ground at y = 0 (player cannot go below 0)
 			if(player.y <= 0){ player.y = 0; player.vel.y = 0; player.onGround = true; }
 			else{ player.onGround = false; }
+
+			// prevent falling/teleporting through walls: if after vertical/horizontal step we intersect world geometry, try resolving
+			if(isBlockedByWorld({x:player.x,y:player.y,z:player.z})){ 
+				// try revert only Y (land on surface)
+				player.y = prevPos.y;
+				if(!isBlockedByWorld({x:player.x,y:player.y,z:player.z})){ player.vel.y = 0; player.onGround = true; }
+				else {
+					// try revert horizontal movement
+					player.x = prevPos.x; player.z = prevPos.z;
+					// if still blocked, revert whole position
+					if(isBlockedByWorld({x:player.x,y:player.y,z:player.z})){ player.x = prevPos.x; player.y = prevPos.y; player.z = prevPos.z; player.vel.y = 0; }
+				}
+			}
 
 			// jump (space): give an upward positive impulse
 			if(keysDown.has(' ' ) || keysDown.has('space') ){
