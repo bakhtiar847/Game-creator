@@ -236,8 +236,7 @@
 		}
 
 		// spawn additional trees using Tree1
-		Tree1.spawn(420, 600, 0);
-		Tree1.spawn(240, 700, 0);
+
 
 		// Platform class
 		class Platform extends WorldObject {
@@ -272,9 +271,7 @@
 		}
 
 		// Ladder & Platform spawn
-		const ladder = Ladder.spawn(200, 0, 520, 0);
-		const platform = Platform.spawn(200, 80, 560, 0);
-		ladder.climbHeight = platform.y + 4;
+
 
 		// Portal class
 		class Portal extends WorldObject {
@@ -327,7 +324,7 @@
 		}
 
 		// spawn a portal (paired): this portal goes to world 1 at x:100,z:100
-		Portal.spawn(600,0,520,0, { target: { x:100, y:0, z:100, world:1 } });
+
 
 
 
@@ -754,14 +751,7 @@
 			}
 		}
 
-		// spawn a couple more chests
-		Chest.spawn(340,0,480,0);
-		Chest.spawn(480,0,520,0);
 
-		// place an axe in the world for pickup
-		AxeWorld.spawn(320,0,460,0);
-		// spawn a car nearby for testing (I:accelerate, K:brake, J/L:steer, O:reverse, Q:enter/exit)
-		Car.spawn(380,0,500,0, { name: 'Car', color: '#2b6f9b' });
 
 		// ensure objects array is available to renderer (it will filter by world)
 
@@ -1679,6 +1669,28 @@
 		setInterval(()=>{ saveState(); }, 60 * 1000);
 		// load saved state on start (if present)
 		loadState();
+
+		// Spawn initial world objects (moved into a single function)
+		function spawnWorld(){
+			// Trees
+			Tree1.spawn(420, 600, 0);
+			Tree1.spawn(240, 700, 0);
+			// Ladder + Platform
+			const ladder = Ladder.spawn(200, 0, 520, 0);
+			const platform = Platform.spawn(200, 80, 560, 0);
+			ladder.climbHeight = platform.y + 4;
+			// Portal (paired)
+			Portal.spawn(600,0,520,0, { target: { x:100, y:0, z:100, world:1 } });
+			// Chests
+			Chest.spawn(340,0,480,0);
+			Chest.spawn(480,0,520,0);
+			// Axe in the world
+			AxeWorld.spawn(320,0,460,0);
+			// Car for testing
+			Car.spawn(380,0,500,0, { name: 'Car', color: '#2b6f9b' });
+		}
+		// call spawnWorld to populate the scene
+		spawnWorld();
 
 
 		function renderList(){
