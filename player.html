@@ -143,8 +143,8 @@
 			}
 		}
 
-		// abstract-ish Tree1 class derived from WorldObject
-		class Tree1 extends WorldObject {
+		// abstract-ish Tree class derived from WorldObject
+		class Tree extends WorldObject {
 			constructor(data){ super(data); }
 			// spawn a tree at x,z in given world
 			static spawn(x,z, world=0){
@@ -1673,8 +1673,8 @@
 		// Spawn initial world objects (moved into a single function)
 		function spawnWorld(){
 			// Trees
-			Tree1.spawn(420, 600, 0);
-			Tree1.spawn(240, 700, 0);
+			Tree.spawn(420, 600, 0);
+			Tree.spawn(240, 700, 0);
 			// Ladder + Platform
 			const ladder = Ladder.spawn(200, 0, 520, 0);
 			const platform = Platform.spawn(200, 80, 560, 0);
