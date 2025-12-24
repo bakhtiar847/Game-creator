@@ -75,9 +75,12 @@
 
 		/* Folder tree */
 		.folder-tree{list-style:none;padding:0;margin:0}
+		.folder-tree-nested{list-style:none;padding-left:20px;margin:4px 0 0 0;display:none}
+		.folder-tree-nested.expanded{display:block}
 		.folder-item{padding:6px 0;cursor:pointer;color:var(--muted);font-size:13px;user-select:none;display:flex;align-items:center;gap:6px}
 		.folder-item:hover{color:#e6eef8}
-		.folder-toggle{width:16px;height:16px;display:flex;align-items:center;justify-content:center;margin-right:4px}
+		.folder-toggle{width:12px;height:12px;display:inline-flex;align-items:center;justify-content:center;margin-right:4px;transition:transform .2s;font-size:10px}
+		.folder-toggle.expanded{transform:rotate(90deg)}
 		.folder-icon::before{content:"📁 "}
 		.file-icon::before{content:"📄 "}
 
@@ -193,32 +196,113 @@
 			const previewContent = document.getElementById('previewContent');
 			const openBtn = document.getElementById('openBtn');
 
-			// Render folder tree
+			// Render folder tree recursively
 			function renderFolderTree(){
 				folderTree.innerHTML = '';
 				FileList.forEach(item => {
-					if(item.type === 'folder'){
-						const li = document.createElement('li');
-						li.className = 'folder-item';
-						li.innerHTML = '<span class="folder-icon"></span><span>' + item.name + '</span>';
-						li.addEventListener('click', () => {
-							selectedFile = null;
-							renderFileList(item.children || []);
-							previewContent.textContent = 'Select a file to preview';
-							openBtn.disabled = true;
-						});
-						folderTree.appendChild(li);
-					}
+					folderTree.appendChild(createFolderNode(item));
 				});
+			}
+
+			function createFolderNode(item){
+				const li = document.createElement('li');
+				
+				const folder = document.createElement('div');
+				folder.className = 'folder-item';
+				
+				const hasChildren = item.children && item.children.length > 0;
+				if(hasChildren){
+					const toggle = document.createElement('span');
+					toggle.className = 'folder-toggle';
+					toggle.textContent = '▶';
+					folder.appendChild(toggle);
+				}
+				
+				const icon = document.createElement('span');
+				icon.className = 'folder-icon';
+				folder.appendChild(icon);
+				
+				const name = document.createElement('span');
+				name.textContent = item.name;
+				folder.appendChild(name);
+				
+				li.appendChild(folder);
+				
+				if(hasChildren){
+					const toggle = folder.querySelector('.folder-toggle');
+					const nested = document.createElement('ul');
+					nested.className = 'folder-tree-nested';
+					
+					item.children.forEach(child => {
+						nested.appendChild(createTreeNode(child));
+					});
+					
+					li.appendChild(nested);
+					
+					toggle.addEventListener('click', e => {
+						e.stopPropagation();
+						nested.classList.toggle('expanded');
+						toggle.classList.toggle('expanded');
+					});
+				}
+				
+				folder.addEventListener('click', () => {
+					selectedFile = null;
+					const files = item.children || [];
+					renderFileList(files);
+					previewContent.textContent = 'Select a file to preview';
+					openBtn.disabled = true;
+				});
+				
+				return li;
+			}
+
+			function createTreeNode(item){
+				if(item.type === 'folder'){
+					return createFolderNode(item);
+				} else {
+					const li = document.createElement('li');
+					const file = document.createElement('div');
+					file.className = 'folder-item';
+					
+					const icon = document.createElement('span');
+					icon.className = 'file-icon';
+					file.appendChild(icon);
+					
+					const name = document.createElement('span');
+					name.textContent = item.name;
+					file.appendChild(name);
+					
+					file.addEventListener('click', () => {
+						selectedFile = item;
+						previewContent.textContent = item.content || '(No content)';
+						openBtn.disabled = false;
+						document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
+					});
+					
+					li.appendChild(file);
+					return li;
+				}
 			}
 
 			// Render file list
 			function renderFileList(files){
 				fileList.innerHTML = '';
 				files.forEach(file => {
-					if(file.type !== 'folder'){
-						const div = document.createElement('div');
-						div.className = 'file-item';
+					const div = document.createElement('div');
+					div.className = 'file-item';
+					
+					if(file.type === 'folder'){
+						div.innerHTML = '<div class="file-name"><span class="folder-icon"></span>' + file.name + '</div><div class="file-type">folder</div>';
+						div.addEventListener('click', () => {
+							document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
+							div.classList.add('selected');
+							selectedFile = null;
+							renderFileList(file.children || []);
+							previewContent.textContent = 'Select a file to preview';
+							openBtn.disabled = true;
+						});
+					} else {
 						div.innerHTML = '<div class="file-name"><span class="file-icon"></span>' + file.name + '</div><div class="file-type">' + file.type + '</div>';
 						div.addEventListener('click', () => {
 							document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
@@ -227,8 +311,9 @@
 							previewContent.textContent = file.content || '(No content)';
 							openBtn.disabled = false;
 						});
-						fileList.appendChild(div);
 					}
+					
+					fileList.appendChild(div);
 				});
 			}
 
