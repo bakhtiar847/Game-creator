@@ -639,19 +639,17 @@
 		const runBtn = document.getElementById('runBtn');
 
 		function GenerateUserCode(){
-			return "// == COMPILED/USER ==\n" + PrepareUserData() + "\n// == COMPILED/USEREND ==";
+			return "// === COMPILE/USERCODESTART ===\n" + PrepareUserData() + "\n// === COMPILE/USERCODEEND ===";
 		}
 
 		function PrepareUserData(){
 			const scripts = PrepareScripts();
 			const assets = PrepareAssets();
 			// Return code that will execute all scripts
-			return `
-				(function() {
-					${scripts}
-					${assets}
-				})();
-			`;
+			return `(function() {
+${scripts}
+${assets}
+})();`;
 		}
 
 		function PrepareScripts(){
