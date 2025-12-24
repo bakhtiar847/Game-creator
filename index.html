@@ -66,6 +66,34 @@
 		/* Page content placeholder */
 		main{padding:24px}
 		.panel{background:rgba(255,255,255,0.02);padding:20px;border-radius:12px;border:1px solid rgba(255,255,255,0.02);min-height:240px}
+
+		/* Files panel layout */
+		.files-container{display:flex;gap:16px;height:calc(100vh - 200px)}
+		.files-sidebar{flex:0 0 200px;background:rgba(255,255,255,0.01);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.02);overflow-y:auto}
+		.files-main{flex:1;background:rgba(255,255,255,0.01);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.02);overflow-y:auto}
+		.files-preview{flex:0 0 250px;background:rgba(255,255,255,0.01);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.02);display:flex;flex-direction:column}
+
+		/* Folder tree */
+		.folder-tree{list-style:none;padding:0;margin:0}
+		.folder-item{padding:6px 0;cursor:pointer;color:var(--muted);font-size:13px;user-select:none;display:flex;align-items:center;gap:6px}
+		.folder-item:hover{color:#e6eef8}
+		.folder-toggle{width:16px;height:16px;display:flex;align-items:center;justify-content:center;margin-right:4px}
+		.folder-icon::before{content:"📁 "}
+		.file-icon::before{content:"📄 "}
+
+		/* File list */
+		.file-item{padding:8px;margin:4px 0;background:rgba(255,255,255,0.03);border-radius:6px;cursor:pointer;border:1px solid rgba(255,255,255,0.02);transition:all .15s ease}
+		.file-item:hover{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.08)}
+		.file-item.selected{background:linear-gradient(90deg,var(--accent),#7c3aed);border-color:var(--accent)}
+		.file-name{font-size:13px;font-weight:500}
+		.file-type{font-size:11px;color:var(--muted)}
+
+		/* Preview panel */
+		.preview-header{font-weight:600;margin-bottom:12px;color:#f8fdff;font-size:13px}
+		.preview-content{flex:1;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:6px;padding:12px;margin-bottom:12px;font-family:monospace;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+		.open-btn{padding:10px 14px;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#032024;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;width:100%}
+		.open-btn:hover{opacity:0.9}
+		.open-btn:disabled{opacity:0.5;cursor:not-allowed}
 	</style>
 </head>
 <body>
@@ -118,9 +146,27 @@
 			<h3>Code</h3>
 			<p class="muted">Edit scripts for gameplay.</p>
 		</section>
-		<section class="panel" id="panelFiles" data-panel style="display:none;margin-top:16px">
-			<h3>Files</h3>
-			<p class="muted">Manage project files and resources.</p>
+		<section class="panel" id="panelFiles" data-panel style="display:none;margin-top:16px;padding:0">
+			<div class="files-container">
+				<!-- Left sidebar: Folder tree -->
+				<div class="files-sidebar">
+					<div style="font-weight:600;margin-bottom:12px;color:#f8fdff;font-size:13px">Folders</div>
+					<ul class="folder-tree" id="folderTree"></ul>
+				</div>
+
+				<!-- Middle: File list -->
+				<div class="files-main">
+					<div style="font-weight:600;margin-bottom:12px;color:#f8fdff;font-size:13px">Files</div>
+					<div id="fileList"></div>
+				</div>
+
+				<!-- Right: Preview panel -->
+				<div class="files-preview">
+					<div class="preview-header">Preview</div>
+					<div class="preview-content" id="previewContent">Select a file to preview</div>
+					<button class="open-btn" id="openBtn" disabled>Open</button>
+				</div>
+			</div>
 		</section>
 		<section class="panel" id="panelSettings" data-panel style="display:none;margin-top:16px">
 			<h3>Settings</h3>
@@ -129,6 +175,74 @@
 	</main>
 
 	<script>
+		const FileList = [
+			{name : "Project", type : "folder", children : [
+				{name : "Scripts", type : "folder", children : [
+					{name : "main", type : "javascript", content : "console.log('Hello, world!');"}
+				]},
+				{name : "assets", type : "folder", children : []}
+			]}
+			];
+
+		let selectedFile = null;
+
+		// Files panel functionality
+		(function(){
+			const folderTree = document.getElementById('folderTree');
+			const fileList = document.getElementById('fileList');
+			const previewContent = document.getElementById('previewContent');
+			const openBtn = document.getElementById('openBtn');
+
+			// Render folder tree
+			function renderFolderTree(){
+				folderTree.innerHTML = '';
+				FileList.forEach(item => {
+					if(item.type === 'folder'){
+						const li = document.createElement('li');
+						li.className = 'folder-item';
+						li.innerHTML = '<span class="folder-icon"></span><span>' + item.name + '</span>';
+						li.addEventListener('click', () => {
+							selectedFile = null;
+							renderFileList(item.children || []);
+							previewContent.textContent = 'Select a file to preview';
+							openBtn.disabled = true;
+						});
+						folderTree.appendChild(li);
+					}
+				});
+			}
+
+			// Render file list
+			function renderFileList(files){
+				fileList.innerHTML = '';
+				files.forEach(file => {
+					if(file.type !== 'folder'){
+						const div = document.createElement('div');
+						div.className = 'file-item';
+						div.innerHTML = '<div class="file-name"><span class="file-icon"></span>' + file.name + '</div><div class="file-type">' + file.type + '</div>';
+						div.addEventListener('click', () => {
+							document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
+							div.classList.add('selected');
+							selectedFile = file;
+							previewContent.textContent = file.content || '(No content)';
+							openBtn.disabled = false;
+						});
+						fileList.appendChild(div);
+					}
+				});
+			}
+
+			// Initial render
+			renderFolderTree();
+
+			// Open button (placeholder)
+			openBtn.addEventListener('click', () => {
+				if(selectedFile){
+					console.log('Opening file:', selectedFile);
+				}
+			});
+		})();
+
 		// Dropdown toggle
 		(function(){
 			const toggle = document.getElementById('projToggle');
