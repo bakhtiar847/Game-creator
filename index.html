@@ -97,6 +97,46 @@
 		.open-btn{padding:10px 14px;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#032024;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;width:100%}
 		.open-btn:hover{opacity:0.9}
 		.open-btn:disabled{opacity:0.5;cursor:not-allowed}
+
+		/* Code panel layout */
+		.code-container{display:flex;flex-direction:column;height:100%}
+		.code-modes{display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:8px}
+		.code-mode-btn{padding:8px 14px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-weight:600;font-size:13px;border-bottom:2px solid transparent;transition:all .15s ease}
+		.code-mode-btn:hover{color:#e6eef8}
+		.code-mode-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+		/* Code editor layout */
+		.code-editor-container{display:flex;gap:16px;flex:1;min-height:0}
+		.code-sidebar{flex:0 0 200px;background:rgba(255,255,255,0.01);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.02);overflow-y:auto;display:flex;flex-direction:column}
+		.code-sidebar-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-weight:600;font-size:13px;color:#f8fdff}
+		.code-sidebar-create{padding:6px 10px;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#032024;border:none;border-radius:5px;cursor:pointer;font-weight:600;font-size:11px}
+		.code-file-tree{flex:1;overflow-y:auto;list-style:none;padding:0;margin:0}
+		.code-file-item{padding:8px;margin:4px 0;background:rgba(255,255,255,0.02);border-radius:6px;cursor:pointer;border:1px solid rgba(255,255,255,0.02);display:flex;justify-content:space-between;align-items:center;transition:all .15s ease;font-size:12px}
+		.code-file-item:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.06)}
+		.code-file-item.selected{background:linear-gradient(90deg,var(--accent),#7c3aed);border-color:var(--accent)}
+		.code-file-item-name{flex:1}
+		.code-file-actions{display:flex;gap:4px}
+		.code-file-action-btn{padding:4px 6px;background:rgba(255,255,255,0.05);border:none;color:var(--muted);cursor:pointer;font-size:10px;border-radius:3px;transition:all .15s ease}
+		.code-file-action-btn:hover{background:rgba(255,255,255,0.15);color:#e6eef8}
+
+		.code-editor-main{flex:1;background:rgba(255,255,255,0.01);border-radius:8px;border:1px solid rgba(255,255,255,0.02);padding:12px;overflow:hidden;display:flex;flex-direction:column}
+		.code-editor-header{font-weight:600;margin-bottom:12px;color:#f8fdff;font-size:13px}
+		.code-editor{flex:1;background:rgba(0,0,0,0.2);border-radius:6px;padding:12px;font-family:'Monaco','Courier New',monospace;font-size:13px;color:#e6eef8;line-height:1.6;overflow:auto;border:1px solid rgba(255,255,255,0.02);resize:none}
+		.code-editor::placeholder{color:var(--muted)}
+
+		/* Dialog styles */
+		.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center}
+		.modal-overlay.show{display:flex}
+		.modal-dialog{background:linear-gradient(180deg,var(--panel),#0f1724);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:24px;min-width:300px;box-shadow:0 20px 60px rgba(0,0,0,0.8)}
+		.modal-dialog h3{margin:0 0 16px 0;color:#f8fdff;font-size:15px}
+		.modal-dialog input{width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;font-size:13px;margin-bottom:16px;font-family:inherit}
+		.modal-dialog input::placeholder{color:var(--muted)}
+		.modal-dialog-actions{display:flex;gap:10px;justify-content:flex-end}
+		.modal-btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;transition:all .15s ease}
+		.modal-btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#032024}
+		.modal-btn-primary:hover{opacity:0.9}
+		.modal-btn-secondary{background:rgba(255,255,255,0.05);color:#e6eef8;border:1px solid rgba(255,255,255,0.1)}
+		.modal-btn-secondary:hover{background:rgba(255,255,255,0.1)}
 	</style>
 </head>
 <body>
@@ -145,9 +185,29 @@
 			<h3>World</h3>
 			<p class="muted">Configure the world and scenes.</p>
 		</section>
-		<section class="panel" id="panelCode" data-panel style="display:none;margin-top:16px">
-			<h3>Code</h3>
-			<p class="muted">Edit scripts for gameplay.</p>
+		<section class="panel" id="panelCode" data-panel style="display:none;margin-top:16px;padding:0">
+			<div class="code-container">
+				<div class="code-modes">
+					<button class="code-mode-btn active" data-mode="text">Text Editor</button>
+					<button class="code-mode-btn" data-mode="blocks">Blocks <span style="font-size:10px;opacity:0.7">(coming soon)</span></button>
+				</div>
+				<div class="code-editor-container">
+					<!-- Left sidebar: File tree -->
+					<div class="code-sidebar">
+						<div class="code-sidebar-header">
+							<span>Scripts</span>
+							<button class="code-sidebar-create" id="createScriptBtn">+ New</button>
+						</div>
+						<ul class="code-file-tree" id="codeFileTree"></ul>
+					</div>
+
+					<!-- Center: Code editor -->
+					<div class="code-editor-main">
+						<div class="code-editor-header" id="codeEditorHeader">Select a file to edit</div>
+						<textarea class="code-editor" id="codeEditorTextarea" placeholder="Select a file to start editing..."></textarea>
+					</div>
+				</div>
+			</div>
 		</section>
 		<section class="panel" id="panelFiles" data-panel style="display:none;margin-top:16px;padding:0">
 			<div class="files-container">
@@ -177,6 +237,18 @@
 		</section>
 	</main>
 
+	<!-- Dialog for naming -->
+	<div class="modal-overlay" id="nameDialog">
+		<div class="modal-dialog">
+			<h3 id="dialogTitle">New Script</h3>
+			<input type="text" id="dialogInput" placeholder="Enter name..." />
+			<div class="modal-dialog-actions">
+				<button class="modal-btn modal-btn-secondary" id="dialogCancel">Cancel</button>
+				<button class="modal-btn modal-btn-primary" id="dialogConfirm">Create</button>
+			</div>
+		</div>
+	</div>
+
 	<script>
 		const FileList = [
 			{name : "Project", type : "folder", children : [
@@ -186,8 +258,6 @@
 				{name : "assets", type : "folder", children : []}
 			]}
 			];
-
-		let selectedFile = null;
 
 		// Files panel functionality
 		(function(){
@@ -320,12 +390,219 @@
 			// Initial render
 			renderFolderTree();
 
-			// Open button (placeholder)
+			// Open button - launch code editor if javascript
 			openBtn.addEventListener('click', () => {
-				if(selectedFile){
-					console.log('Opening file:', selectedFile);
+				if(selectedFile && selectedFile.type === 'javascript'){
+					// Switch to Code tab and load file
+					const codeTab = document.querySelector('[data-tab="code"]');
+					codeTab.click();
+					// Load file into editor after tab switches
+					setTimeout(() => {
+						loadFileIntoEditor(selectedFile);
+					}, 100);
 				}
 			});
+		})();
+
+		// Code panel functionality
+		(function(){
+			const codeFileTree = document.getElementById('codeFileTree');
+			const codeEditorTextarea = document.getElementById('codeEditorTextarea');
+			const codeEditorHeader = document.getElementById('codeEditorHeader');
+			const createScriptBtn = document.getElementById('createScriptBtn');
+			const nameDialog = document.getElementById('nameDialog');
+			const dialogInput = document.getElementById('dialogInput');
+			const dialogTitle = document.getElementById('dialogTitle');
+			const dialogConfirm = document.getElementById('dialogConfirm');
+			const dialogCancel = document.getElementById('dialogCancel');
+			const modeBtns = document.querySelectorAll('.code-mode-btn');
+
+			let currentEditingFile = null;
+			let dialogMode = 'create'; // 'create', 'rename'
+
+			// Get Scripts folder from FileList
+			function getScriptsFolder(){
+				const project = FileList[0];
+				return project.children.find(c => c.name === 'Scripts');
+			}
+
+			// Render code file tree
+			function renderCodeFileTree(){
+				codeFileTree.innerHTML = '';
+				const scripts = getScriptsFolder();
+				if(scripts && scripts.children){
+					scripts.children.forEach(file => {
+						renderCodeFileItem(file);
+					});
+				}
+			}
+
+			function renderCodeFileItem(file){
+				const li = document.createElement('li');
+				const div = document.createElement('div');
+				div.className = 'code-file-item';
+				
+				const nameSpan = document.createElement('span');
+				nameSpan.className = 'code-file-item-name';
+				nameSpan.textContent = file.name;
+				
+				const actionsDiv = document.createElement('div');
+				actionsDiv.className = 'code-file-actions';
+				
+				const renameBtn = document.createElement('button');
+				renameBtn.className = 'code-file-action-btn';
+				renameBtn.textContent = '✏️';
+				renameBtn.title = 'Rename';
+				renameBtn.addEventListener('click', (e) => {
+					e.stopPropagation();
+					showRenameDialog(file);
+				});
+				
+				const deleteBtn = document.createElement('button');
+				deleteBtn.className = 'code-file-action-btn';
+				deleteBtn.textContent = '🗑️';
+				deleteBtn.title = 'Delete';
+				deleteBtn.addEventListener('click', (e) => {
+					e.stopPropagation();
+					deleteFile(file);
+				});
+				
+				actionsDiv.appendChild(renameBtn);
+				actionsDiv.appendChild(deleteBtn);
+				
+				div.appendChild(nameSpan);
+				div.appendChild(actionsDiv);
+				
+				div.addEventListener('click', () => {
+					document.querySelectorAll('.code-file-item').forEach(f => f.classList.remove('selected'));
+					div.classList.add('selected');
+					currentEditingFile = file;
+					codeEditorHeader.textContent = file.name;
+					codeEditorTextarea.value = file.content || '';
+				});
+				
+				li.appendChild(div);
+				codeFileTree.appendChild(li);
+			}
+
+			function showCreateDialog(){
+				dialogMode = 'create';
+				dialogTitle.textContent = 'New Script';
+				dialogInput.value = '';
+				dialogInput.placeholder = 'Enter script name...';
+				nameDialog.classList.add('show');
+				dialogInput.focus();
+			}
+
+			function showRenameDialog(file){
+				dialogMode = 'rename';
+				dialogTitle.textContent = 'Rename Script';
+				dialogInput.value = file.name;
+				dialogInput.placeholder = 'Enter new name...';
+				currentEditingFile = file;
+				nameDialog.classList.add('show');
+				dialogInput.select();
+			}
+
+			function deleteFile(file){
+				const scripts = getScriptsFolder();
+				if(scripts){
+					const idx = scripts.children.indexOf(file);
+					if(idx > -1){
+						scripts.children.splice(idx, 1);
+						renderCodeFileTree();
+						if(currentEditingFile === file){
+							currentEditingFile = null;
+							codeEditorHeader.textContent = 'Select a file to edit';
+							codeEditorTextarea.value = '';
+						}
+					}
+				}
+			}
+
+			function createNewScript(name){
+				const scripts = getScriptsFolder();
+				if(scripts){
+					const newFile = {
+						name: name,
+						type: 'javascript',
+						content: `// ${name}\nconsole.log('Hello from ${name}!');`
+					};
+					scripts.children.push(newFile);
+					renderCodeFileTree();
+				}
+			}
+
+			function renameScript(newName){
+				if(currentEditingFile){
+					currentEditingFile.name = newName;
+					codeEditorHeader.textContent = newName;
+					renderCodeFileTree();
+				}
+			}
+
+			// Dialog handlers
+			dialogConfirm.addEventListener('click', () => {
+				const name = dialogInput.value.trim();
+				if(name){
+					if(dialogMode === 'create'){
+						createNewScript(name);
+					} else if(dialogMode === 'rename'){
+						renameScript(name);
+					}
+					nameDialog.classList.remove('show');
+				}
+			});
+
+			dialogCancel.addEventListener('click', () => {
+				nameDialog.classList.remove('show');
+			});
+
+			nameDialog.addEventListener('click', (e) => {
+				if(e.target === nameDialog){
+					nameDialog.classList.remove('show');
+				}
+			});
+
+			dialogInput.addEventListener('keypress', (e) => {
+				if(e.key === 'Enter'){
+					dialogConfirm.click();
+				}
+			});
+
+			// Create button
+			createScriptBtn.addEventListener('click', showCreateDialog);
+
+			// Mode buttons (blocks is disabled for now)
+			modeBtns.forEach(btn => {
+				btn.addEventListener('click', () => {
+					if(btn.dataset.mode === 'blocks'){
+						return; // Blocks not available yet
+					}
+					modeBtns.forEach(b => b.classList.remove('active'));
+					btn.classList.add('active');
+				});
+			});
+
+			// Save on textarea change
+			codeEditorTextarea.addEventListener('input', () => {
+				if(currentEditingFile){
+					currentEditingFile.content = codeEditorTextarea.value;
+				}
+			});
+
+			// Initial render
+			renderCodeFileTree();
+
+			// Expose function for files panel to use
+			window.loadFileIntoEditor = function(file){
+				if(file.type === 'javascript'){
+					document.querySelectorAll('.code-file-item').forEach(f => f.classList.remove('selected'));
+					currentEditingFile = file;
+					codeEditorHeader.textContent = file.name;
+					codeEditorTextarea.value = file.content || '';
+				}
+			};
 		})();
 
 		// Dropdown toggle
