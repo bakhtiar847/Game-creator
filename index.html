@@ -639,11 +639,34 @@
 		const runBtn = document.getElementById('runBtn');
 
 		function GenerateUserCode(){
-			return "// == COMPILED/USER ==\n" + PrepareCode() + "\n// == COMPILED/USEREND ==";
+			return "// == COMPILED/USER ==\n" + PrepareUserData() + "\n// == COMPILED/USEREND ==";
 		}
 
-		function PrepareCode(){
+		function PrepareUserData(){
+			const scripts = PrepareScripts();
+			const assets = PrepareAssets();
+			// Return code that will execute all scripts
+			return `
+				(function() {
+					${scripts}
+					${assets}
+				})();
+			`;
+		}
 
+		function PrepareScripts(){
+			const scripts = FileList[0].children.find(c => c.name === 'Scripts');
+			if(!scripts || !scripts.children){
+				return '';
+			}
+			return scripts.children
+				.filter(file => file.type === 'javascript')
+				.map(file => file.content || '')
+				.join('\n\n// == COMPILER/SCRIPTSEPERATOR ==\n\n');
+		}
+
+		function PrepareAssets(){
+			
 		}
 
 		// Prepare the player.html code
