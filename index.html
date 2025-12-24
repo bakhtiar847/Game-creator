@@ -64,8 +64,8 @@
 		}
 
 		/* Page content placeholder */
-		main{padding:24px}
-		.panel{background:rgba(255,255,255,0.02);padding:20px;border-radius:12px;border:1px solid rgba(255,255,255,0.02);min-height:240px}
+		main{padding:24px;height:calc(100vh - 80px);overflow:hidden}
+		.panel{background:rgba(255,255,255,0.02);padding:20px;border-radius:12px;border:1px solid rgba(255,255,255,0.02);min-height:240px;height:100%}
 
 		/* Files panel layout */
 		.files-container{display:flex;gap:16px;height:calc(100vh - 200px)}
@@ -99,8 +99,8 @@
 		.open-btn:disabled{opacity:0.5;cursor:not-allowed}
 
 		/* Code panel layout */
-		.code-container{display:flex;flex-direction:column;height:100%}
-		.code-modes{display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:8px}
+		.code-container{display:flex;flex-direction:column;height:100%;width:100%}
+		.code-modes{display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:8px;flex-shrink:0}
 		.code-mode-btn{padding:8px 14px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-weight:600;font-size:13px;border-bottom:2px solid transparent;transition:all .15s ease}
 		.code-mode-btn:hover{color:#e6eef8}
 		.code-mode-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
