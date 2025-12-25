@@ -737,7 +737,7 @@
 			function activate(tab){
 				tabs.forEach(t=>{t.classList.toggle('active', t===tab); t.setAttribute('aria-selected', String(t===tab));});
 				const name = tab.dataset.tab;
-				panels.forEach(p=>p.style.display = p.id === 'panel'+name.charAt(0).toUpperCase()+name.slice(1) ? '' : 'none');
+				panels.forEach(p=>p.style.display = p.id === 'panel'+name.charAt(0).toUpperCase()+name.slice(1) ? 'block' : 'none');
 			}
 			tabs.forEach(t=>t.addEventListener('click', ()=>activate(t)));
 		})();
