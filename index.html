@@ -255,7 +255,12 @@
 				{name : "Scripts", type : "folder", children : [
 					{name : "main", type : "javascript", content : "console.log('Hello, world!');"}
 				]},
-				{name : "assets", type : "folder", children : []}
+				{name : "assets", type : "folder", children : []},
+				{name : "notes", type : "folder", children : [
+					{name : "welcome", type : "htmlnote", content : "<html><head><title>Welcome</title></head><body><h1>Welcome to the Game Creator!</h1></body></html>"},
+					{name : "main", type : "plaintext", content : "Put your notes here..."}]},
+				{name : "world", type : "folder", children : []},
+				{name : "settings", type : "folder", children : []}
 			]}
 			];
 
@@ -381,6 +386,15 @@
 							previewContent.textContent = file.content || '(No content)';
 							openBtn.disabled = false;
 						});
+						div.addEventListener('dblclick', () => {
+							if(selectedFile && (selectedFile.type === 'javascript' || selectedFile.type === 'plaintext' || selectedFile.type === 'htmlnote')){
+								const codeTab = document.querySelector('[data-tab="code"]');
+								codeTab.click();
+								setTimeout(() => {
+									loadFileIntoEditor(selectedFile);
+								}, 100);
+							}
+						});
 					}
 					
 					fileList.appendChild(div);
@@ -390,9 +404,9 @@
 			// Initial render
 			renderFolderTree();
 
-			// Open button - launch code editor if javascript
+			// Open button - launch code editor if javascript, plaintext, or htmlnote
 			openBtn.addEventListener('click', () => {
-				if(selectedFile && selectedFile.type === 'javascript'){
+				if(selectedFile && (selectedFile.type === 'javascript' || selectedFile.type === 'plaintext' || selectedFile.type === 'htmlnote')){
 					// Switch to Code tab and load file
 					const codeTab = document.querySelector('[data-tab="code"]');
 					codeTab.click();
@@ -596,7 +610,7 @@
 
 			// Expose function for files panel to use
 			window.loadFileIntoEditor = function(file){
-				if(file.type === 'javascript'){
+				if(file.type === 'javascript' || file.type === 'plaintext' || file.type === 'htmlnote'){
 					document.querySelectorAll('.code-file-item').forEach(f => f.classList.remove('selected'));
 					currentEditingFile = file;
 					codeEditorHeader.textContent = file.name;
