@@ -482,52 +482,87 @@
 				}
 			}
 
-			function renderCodeFileItem(file){
+			function createCodeTreeNode(item){
 				const li = document.createElement('li');
-				const div = document.createElement('div');
-				div.className = 'code-file-item';
-				
-				const nameSpan = document.createElement('span');
-				nameSpan.className = 'code-file-item-name';
-				nameSpan.textContent = file.name;
-				
-				const actionsDiv = document.createElement('div');
-				actionsDiv.className = 'code-file-actions';
-				
-				const renameBtn = document.createElement('button');
-				renameBtn.className = 'code-file-action-btn';
-				renameBtn.textContent = '✏️';
-				renameBtn.title = 'Rename';
-				renameBtn.addEventListener('click', (e) => {
-					e.stopPropagation();
-					showRenameDialog(file);
-				});
-				
-				const deleteBtn = document.createElement('button');
-				deleteBtn.className = 'code-file-action-btn';
-				deleteBtn.textContent = '🗑️';
-				deleteBtn.title = 'Delete';
-				deleteBtn.addEventListener('click', (e) => {
-					e.stopPropagation();
-					deleteFile(file);
-				});
-				
-				actionsDiv.appendChild(renameBtn);
-				actionsDiv.appendChild(deleteBtn);
-				
-				div.appendChild(nameSpan);
-				div.appendChild(actionsDiv);
-				
-				div.addEventListener('click', () => {
-					document.querySelectorAll('.code-file-item').forEach(f => f.classList.remove('selected'));
-					div.classList.add('selected');
-					currentEditingFile = file;
-					codeEditorHeader.textContent = file.name;
-					codeEditorTextarea.value = file.content || '';
-				});
-				
-				li.appendChild(div);
-				codeFileTree.appendChild(li);
+				if(item.type === 'folder'){
+					const folder = document.createElement('div');
+					folder.className = 'code-file-item';
+					
+					const toggle = document.createElement('span');
+					toggle.className = 'folder-toggle';
+					toggle.textContent = '▶';
+					folder.appendChild(toggle);
+					
+					const icon = document.createElement('span');
+					icon.className = 'folder-icon';
+					folder.appendChild(icon);
+					
+					const name = document.createElement('span');
+					name.textContent = item.name;
+					folder.appendChild(name);
+					
+					li.appendChild(folder);
+					
+					const nested = document.createElement('ul');
+					nested.className = 'code-file-tree-nested';
+					if(item.children){
+						item.children.forEach(child => {
+							nested.appendChild(createCodeTreeNode(child));
+						});
+					}
+					li.appendChild(nested);
+					
+					toggle.addEventListener('click', e => {
+						e.stopPropagation();
+						nested.classList.toggle('expanded');
+						toggle.classList.toggle('expanded');
+					});
+				} else {
+					const div = document.createElement('div');
+					div.className = 'code-file-item';
+					
+					const nameSpan = document.createElement('span');
+					nameSpan.className = 'code-file-item-name';
+					nameSpan.textContent = item.name;
+					
+					const actionsDiv = document.createElement('div');
+					actionsDiv.className = 'code-file-actions';
+					
+					const renameBtn = document.createElement('button');
+					renameBtn.className = 'code-file-action-btn';
+					renameBtn.textContent = '✏️';
+					renameBtn.title = 'Rename';
+					renameBtn.addEventListener('click', (e) => {
+						e.stopPropagation();
+						showRenameDialog(item);
+					});
+					
+					const deleteBtn = document.createElement('button');
+					deleteBtn.className = 'code-file-action-btn';
+					deleteBtn.textContent = '🗑️';
+					deleteBtn.title = 'Delete';
+					deleteBtn.addEventListener('click', (e) => {
+						e.stopPropagation();
+						deleteFile(item);
+					});
+					
+					actionsDiv.appendChild(renameBtn);
+					actionsDiv.appendChild(deleteBtn);
+					
+					div.appendChild(nameSpan);
+					div.appendChild(actionsDiv);
+					
+					div.addEventListener('click', () => {
+						document.querySelectorAll('.code-file-item').forEach(f => f.classList.remove('selected'));
+						div.classList.add('selected');
+						currentEditingFile = item;
+						codeEditorHeader.textContent = item.name;
+						codeEditorTextarea.value = item.content || '';
+					});
+					
+					li.appendChild(div);
+				}
+				return li;
 			}
 
 			function showCreateDialog(){
