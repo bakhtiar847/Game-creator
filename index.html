@@ -350,7 +350,11 @@
 					
 					file.addEventListener('click', () => {
 						selectedFile = item;
-						previewContent.textContent = item.content || '(No content)';
+						if (item.type === 'htmlnote') {
+							previewContent.innerHTML = item.content || '(No content)';
+						} else {
+							previewContent.textContent = item.content || '(No content)';
+						}
 						openBtn.disabled = false;
 						document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
 					});
@@ -383,7 +387,11 @@
 							document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
 							div.classList.add('selected');
 							selectedFile = file;
-							previewContent.textContent = file.content || '(No content)';
+							if (file.type === 'htmlnote') {
+								previewContent.innerHTML = file.content || '(No content)';
+							} else {
+								previewContent.textContent = file.content || '(No content)';
+							}
 							openBtn.disabled = false;
 						});
 						div.addEventListener('dblclick', () => {
