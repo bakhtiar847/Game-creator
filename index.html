@@ -476,8 +476,8 @@
 				codeFileTree.innerHTML = '';
 				const scripts = getScriptsFolder();
 				if(scripts && scripts.children){
-					scripts.children.forEach(file => {
-						renderCodeFileItem(file);
+					scripts.children.forEach(child => {
+						codeFileTree.appendChild(createCodeTreeNode(child));
 					});
 				}
 			}
