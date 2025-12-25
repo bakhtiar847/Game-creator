@@ -628,12 +628,20 @@
 			dialogConfirm.addEventListener('click', () => {
 				const name = dialogInput.value.trim();
 				if(name){
-					if(dialogMode === 'create_script'){
-						window.createNewScript(name);
-					} else if(dialogMode === 'create_folder'){
-						window.createNewFolder(name);
-					} else if(dialogMode === 'rename'){
+					if(dialogMode === 'rename'){
 						renameScript(name);
+					} else {
+						let itemType = dialogMode.replace('create_', '');
+						if(itemType === 'item'){
+							itemType = document.getElementById('dialogType').value;
+						}
+						if(itemType === 'folder'){
+							window.createNewFolder(name);
+						} else if(itemType === 'script'){
+							window.createNewScript(name);
+						} else {
+							window.createNewFile(name, itemType);
+						}
 					}
 					nameDialog.classList.remove('show');
 				}
