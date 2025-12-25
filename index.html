@@ -565,11 +565,22 @@
 				return li;
 			}
 
-			function showCreateDialog(){
+			function showCreateDialog(context = 'code'){
 				dialogMode = 'create';
-				dialogTitle.textContent = 'New Script';
+				dialogContext = context;
+				dialogTitle.textContent = context === 'code' ? 'New Script' : 'New File/Folder';
 				dialogInput.value = '';
-				dialogInput.placeholder = 'Enter script name...';
+				dialogInput.placeholder = 'Enter name...';
+				// Populate type options
+				const dialogType = document.getElementById('dialogType');
+				dialogType.innerHTML = '';
+				if(context === 'code'){
+					dialogType.innerHTML = '<option value="javascript">JavaScript</option><option value="folder">Folder</option>';
+					dialogType.value = 'javascript';
+				} else {
+					dialogType.innerHTML = '<option value="folder">Folder</option><option value="javascript">JavaScript</option><option value="plaintext">Plain Text</option><option value="htmlnote">HTML Note</option>';
+					dialogType.value = 'plaintext';
+				}
 				nameDialog.classList.add('show');
 				dialogInput.focus();
 			}
@@ -600,16 +611,27 @@
 				}
 			}
 
-			function createNewScript(name){
-				const scripts = getScriptsFolder();
-				if(scripts){
-					const newFile = {
+			function createFileInFolder(name, type){
+				let newItem;
+				if(type === 'folder'){
+					newItem = {
 						name: name,
-						type: 'javascript',
-						content: `// ${name}\nconsole.log('Hello from ${name}!');`
+						type: 'folder',
+						children: []
 					};
-					scripts.children.push(newFile);
-					renderCodeFileTree();
+				} else {
+					newItem = {
+						name: name,
+						type: type,
+						content: type === 'javascript' ? `// ${name}\nconsole.log('Hello from ${name}!');` : ''
+					};
+				}
+				currentFolder.children.push(newItem);
+				// Re-render
+				if(currentFolder === FileList[0]){
+					renderFolderTree();
+				} else {
+					renderFileList(currentFolder.children);
 				}
 			}
 
@@ -624,9 +646,14 @@
 			// Dialog handlers
 			dialogConfirm.addEventListener('click', () => {
 				const name = dialogInput.value.trim();
+				const type = dialogType.value;
 				if(name){
 					if(dialogMode === 'create'){
-						createNewScript(name);
+						if(dialogContext === 'code'){
+							createNewFile(name, type);
+						} else {
+							createFileInFolder(name, type);
+						}
 					} else if(dialogMode === 'rename'){
 						renameScript(name);
 					}
