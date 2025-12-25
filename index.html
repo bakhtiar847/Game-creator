@@ -431,7 +431,7 @@
 
 			// Create button
 			createFileBtn.addEventListener('click', () => {
-				showCreateDialog('files');
+				window.showCreateDialog('files');
 			});
 
 			// Open button - launch code editor if javascript, plaintext, or htmlnote
@@ -464,6 +464,9 @@
 			let currentEditingFile = null;
 			let dialogMode = 'create'; // 'create', 'rename'
 			let dialogContext = 'code';
+
+			window.dialogMode = dialogMode;
+			window.dialogContext = dialogContext;
 
 			// Get Scripts folder from FileList
 			function getScriptsFolder(){
@@ -566,8 +569,8 @@
 			}
 
 			function showCreateDialog(context = 'code'){
-				dialogMode = 'create';
-				dialogContext = context;
+				window.dialogMode = 'create';
+				window.dialogContext = context;
 				dialogTitle.textContent = context === 'code' ? 'New Script' : 'New File/Folder';
 				dialogInput.value = '';
 				dialogInput.placeholder = 'Enter name...';
@@ -585,8 +588,10 @@
 				dialogInput.focus();
 			}
 
+			window.showCreateDialog = showCreateDialog;
+
 			function showRenameDialog(file){
-				dialogMode = 'rename';
+				window.dialogMode = 'rename';
 				dialogTitle.textContent = 'Rename Script';
 				dialogInput.value = file.name;
 				dialogInput.placeholder = 'Enter new name...';
@@ -635,6 +640,9 @@
 				}
 			}
 
+			window.createNewFile = createNewFile;
+			window.createFileInFolder = createFileInFolder;
+
 			function renameScript(newName){
 				if(currentEditingFile){
 					currentEditingFile.name = newName;
@@ -648,13 +656,13 @@
 				const name = dialogInput.value.trim();
 				const type = dialogType.value;
 				if(name){
-					if(dialogMode === 'create'){
-						if(dialogContext === 'code'){
-							createNewFile(name, type);
+					if(window.dialogMode === 'create'){
+						if(window.dialogContext === 'code'){
+							window.createNewFile(name, type);
 						} else {
-							createFileInFolder(name, type);
+							window.createFileInFolder(name, type);
 						}
-					} else if(dialogMode === 'rename'){
+					} else if(window.dialogMode === 'rename'){
 						renameScript(name);
 					}
 					nameDialog.classList.remove('show');
