@@ -219,7 +219,10 @@
 
 				<!-- Middle: File list -->
 				<div class="files-main">
-					<div style="font-weight:600;margin-bottom:12px;color:#f8fdff;font-size:13px">Files</div>
+					<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+						<span style="font-weight:600;color:#f8fdff;font-size:13px">Files</span>
+						<button id="createFileBtn" style="padding:4px 8px;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#032024;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:11px">+</button>
+					</div>
 					<div id="fileList"></div>
 				</div>
 
@@ -270,6 +273,8 @@
 			const fileList = document.getElementById('fileList');
 			const previewContent = document.getElementById('previewContent');
 			const openBtn = document.getElementById('openBtn');
+			const createFileBtn = document.getElementById('createFileBtn');
+			let currentFolder = FileList[0]; // root
 
 			// Render folder tree recursively
 			function renderFolderTree(){
@@ -323,6 +328,7 @@
 				
 				folder.addEventListener('click', () => {
 					selectedFile = null;
+					currentFolder = item;
 					const files = item.children || [];
 					renderFileList(files);
 					previewContent.textContent = 'Select a file to preview';
@@ -411,6 +417,7 @@
 
 			// Initial render
 			renderFolderTree();
+			renderFileList(currentFolder.children);
 
 			// Open button - launch code editor if javascript, plaintext, or htmlnote
 			openBtn.addEventListener('click', () => {
@@ -424,7 +431,22 @@
 					}, 100);
 				}
 			});
-		})();
+
+			// Create folder button
+			createFileBtn.addEventListener('click', () => {
+				showCreateDialog('folder');
+			});
+
+			function createNewFolder(name){
+				if(currentFolder){
+					const newFolder = {name: name, type: 'folder', children: []};
+					currentFolder.children.push(newFolder);
+					renderFolderTree();
+					renderFileList(currentFolder.children);
+				}
+			}
+
+			window.createNewFolder = createNewFolder;
 
 		// Code panel functionality
 		(function(){
@@ -507,11 +529,16 @@
 				codeFileTree.appendChild(li);
 			}
 
-			function showCreateDialog(){
-				dialogMode = 'create';
-				dialogTitle.textContent = 'New Script';
+			function showCreateDialog(type){
+				dialogMode = 'create_' + type;
+				if(type === 'script'){
+					dialogTitle.textContent = 'New Script';
+					dialogInput.placeholder = 'Enter script name...';
+				} else if(type === 'folder'){
+					dialogTitle.textContent = 'New Folder';
+					dialogInput.placeholder = 'Enter folder name...';
+				}
 				dialogInput.value = '';
-				dialogInput.placeholder = 'Enter script name...';
 				nameDialog.classList.add('show');
 				dialogInput.focus();
 			}
@@ -555,6 +582,8 @@
 				}
 			}
 
+			window.createNewScript = createNewScript;
+
 			function renameScript(newName){
 				if(currentEditingFile){
 					currentEditingFile.name = newName;
@@ -567,8 +596,10 @@
 			dialogConfirm.addEventListener('click', () => {
 				const name = dialogInput.value.trim();
 				if(name){
-					if(dialogMode === 'create'){
-						createNewScript(name);
+					if(dialogMode === 'create_script'){
+						window.createNewScript(name);
+					} else if(dialogMode === 'create_folder'){
+						window.createNewFolder(name);
 					} else if(dialogMode === 'rename'){
 						renameScript(name);
 					}
@@ -593,7 +624,7 @@
 			});
 
 			// Create button
-			createScriptBtn.addEventListener('click', showCreateDialog);
+			createScriptBtn.addEventListener('click', () => showCreateDialog('script'));
 
 			// Mode buttons (blocks is disabled for now)
 			modeBtns.forEach(btn => {
