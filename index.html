@@ -245,12 +245,6 @@
 		<div class="modal-dialog">
 			<h3 id="dialogTitle">New Script</h3>
 			<input type="text" id="dialogInput" placeholder="Enter name..." />
-			<select id="dialogType" style="display:none;width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;font-size:13px;margin-bottom:16px;font-family:inherit">
-				<option value="folder">Folder</option>
-				<option value="plaintext">Plaintext File</option>
-				<option value="htmlnote">HTML Note</option>
-				<option value="javascript">JavaScript File</option>
-			</select>
 			<div class="modal-dialog-actions">
 				<button class="modal-btn modal-btn-secondary" id="dialogCancel">Cancel</button>
 				<button class="modal-btn modal-btn-primary" id="dialogConfirm">Create</button>
@@ -440,7 +434,7 @@
 
 			// Create folder button
 			createFileBtn.addEventListener('click', () => {
-				showCreateDialog('item');
+				showCreateDialog('folder');
 			});
 
 			function createNewFolder(name){
@@ -452,25 +446,7 @@
 				}
 			}
 
-			function createNewFile(name, type){
-				if(currentFolder){
-					const content = getDefaultContent(type, name);
-					const newFile = {name: name, type: type, content: content};
-					currentFolder.children.push(newFile);
-					renderFolderTree();
-					renderFileList(currentFolder.children);
-				}
-			}
-
-			function getDefaultContent(type, name){
-				if(type === 'plaintext') return 'Put your text here...';
-				if(type === 'htmlnote') return '<html><head><title>' + name + '</title></head><body><h1>' + name + '</h1></body></html>';
-				if(type === 'javascript') return '// ' + name + '\nconsole.log(\'Hello from ' + name + '!\');';
-				return '';
-			}
-
 			window.createNewFolder = createNewFolder;
-			window.createNewFile = createNewFile;
 
 		// Code panel functionality
 		(function(){
@@ -555,20 +531,12 @@
 
 			function showCreateDialog(type){
 				dialogMode = 'create_' + type;
-				if(type === 'item'){
-					dialogTitle.textContent = 'New Item';
-					document.getElementById('dialogType').style.display = 'block';
-					document.getElementById('dialogType').value = 'folder';
-					dialogInput.placeholder = 'Enter name...';
-				} else {
-					if(type === 'script'){
-						dialogTitle.textContent = 'New Script';
-						dialogInput.placeholder = 'Enter script name...';
-					} else if(type === 'folder'){
-						dialogTitle.textContent = 'New Folder';
-						dialogInput.placeholder = 'Enter folder name...';
-					}
-					document.getElementById('dialogType').style.display = 'none';
+				if(type === 'script'){
+					dialogTitle.textContent = 'New Script';
+					dialogInput.placeholder = 'Enter script name...';
+				} else if(type === 'folder'){
+					dialogTitle.textContent = 'New Folder';
+					dialogInput.placeholder = 'Enter folder name...';
 				}
 				dialogInput.value = '';
 				nameDialog.classList.add('show');
@@ -628,20 +596,12 @@
 			dialogConfirm.addEventListener('click', () => {
 				const name = dialogInput.value.trim();
 				if(name){
-					if(dialogMode === 'rename'){
+					if(dialogMode === 'create_script'){
+						window.createNewScript(name);
+					} else if(dialogMode === 'create_folder'){
+						window.createNewFolder(name);
+					} else if(dialogMode === 'rename'){
 						renameScript(name);
-					} else {
-						let itemType = dialogMode.replace('create_', '');
-						if(itemType === 'item'){
-							itemType = document.getElementById('dialogType').value;
-						}
-						if(itemType === 'folder'){
-							window.createNewFolder(name);
-						} else if(itemType === 'script'){
-							window.createNewScript(name);
-						} else {
-							window.createNewFile(name, itemType);
-						}
 					}
 					nameDialog.classList.remove('show');
 				}
