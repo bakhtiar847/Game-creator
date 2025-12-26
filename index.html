@@ -634,6 +634,20 @@
 				}
 			}
 
+			function createNewFile(name, type){
+				const scripts = getScriptsFolder();
+				if(scripts){
+					let newItem;
+					if(type === 'folder'){
+						newItem = {name, type: 'folder', children: []};
+					} else {
+						newItem = {name, type, content: type === 'javascript' ? `// ${name}\nconsole.log('Hello from ${name}!');` : ''};
+					}
+					scripts.children.push(newItem);
+					renderCodeFileTree();
+				}
+			}
+
 			window.createNewFile = createNewFile;
 
 			function renameScript(newName){
