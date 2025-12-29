@@ -1399,10 +1399,10 @@
 			lastFrame = now;
 
 			// if paused, skip physics updates but still render pause menu once
-			if(paused){ if (!firstFrame) loopUser(); renderer.render(); if (firstFrame) firstFrame = false; requestAnimationFrame(physicsStep); return; }
+			if(paused){ if (!firstFrame) loopUser(); renderer.render(); if (firstFrame && !paused) { initUser(); firstFrame = false; } requestAnimationFrame(physicsStep); return; }
 
 			// if climbing animation is active, skip physics updates to allow animation to control position
-			if(player._isClimbing){ if (!firstFrame) loopUser(); renderer.render(); if (firstFrame) firstFrame = false; requestAnimationFrame(physicsStep); return; }
+			if(player._isClimbing){ if (!firstFrame) loopUser(); renderer.render(); if (firstFrame && !paused) { initUser(); firstFrame = false; } requestAnimationFrame(physicsStep); return; }
 
 			// controls: arrows to look (adjust player rotation), WASD to move relative to player rotation
 			// camera rotation (arrow keys) — camera drives player orientation
@@ -1449,7 +1449,7 @@
 					player.radius = savedPlayerRadius;
 					// attach player to car
 					player.x = car.x; player.z = car.z; player.y = car.y + 14; player.rotY = car.rotY;
-					if (!firstFrame) loopUser(); renderer.render(); if (firstFrame) firstFrame = false; requestAnimationFrame(physicsStep); return;
+					if (!firstFrame) loopUser(); renderer.render(); if (firstFrame && !paused) { initUser(); firstFrame = false; } requestAnimationFrame(physicsStep); return;
 				}
 			}
 
@@ -1521,11 +1521,10 @@
 			}
 
 			// update camera and render via renderer
-			if (!firstFrame) loopUser(); renderer.render(); if (firstFrame) firstFrame = false;
+			if (!firstFrame) loopUser(); renderer.render(); if (firstFrame && !paused) { initUser(); firstFrame = false; }
 			requestAnimationFrame(physicsStep);
 		}
 
-		initUser();
 		requestAnimationFrame(physicsStep);
 
 		// helper to get object in center of view via renderer
