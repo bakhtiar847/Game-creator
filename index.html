@@ -152,11 +152,10 @@
 					<span class="caret" aria-hidden="true"></span>
 				</button>
 				<div class="dropdown-panel" id="projPanel" role="menu" aria-label="Project details">
-					<div class="proj-title">My Game Project</div>
-					<div class="proj-meta">
-						<div><strong>Owner:</strong> You</div>
-						<div><strong>Created:</strong> 2025-11-18</div>
-						<div style="margin-top:8px">A small project to build game scenes, assets, and code. Use the tabs to switch views.</div>
+					<div class="proj-title" id="projTitle">Loading...</div>
+					<div class="proj-meta"><div id="projDescription" style="margin-top:8px">Description is loading...</div></div>
+					<div style="margin-top:12px">
+						<button id="renameProjectBtn" class="modal-btn modal-btn-primary">Rename</button>
 					</div>
 				</div>
 			</div>
@@ -281,11 +280,35 @@ function loopUser(){
 				{name : "assets", type : "folder", children : []},
 				{name : "notes", type : "folder", children : [
 					{name : "welcome", type : "htmlnote", content : "<html><head><title>Welcome</title></head><body><h1>Welcome to the Game Creator!</h1></body></html>"},
-					{name : "main", type : "plaintext", content : "Put your notes here..."}]},
+					{name : "main", type : "plaintext", content : "Put your notes here..."},
+					{name : "description", type : "plaintext", content : "No description provided."}]},
 				{name : "world", type : "folder", children : []},
 				{name : "settings", type : "folder", children : []}
 			]}
 			];
+
+		// Helper: find description file (notes/description)
+		function findDescriptionFile(){
+			const project = FileList[0];
+			if(!project) return null;
+			const notes = project.children.find(c=>c.name === 'notes');
+			if(!notes || !notes.children) return null;
+			return notes.children.find(c=>c.name === 'description');
+		}
+
+		function updateProjectPanel(){
+			const nameEl = document.querySelector('.proj-name');
+			const titleEl = document.getElementById('projTitle');
+			const descEl = document.getElementById('projDescription');
+			if(nameEl) nameEl.textContent = ProjectName;
+			if(titleEl) titleEl.textContent = ProjectName;
+			const descFile = findDescriptionFile();
+			if(descEl) descEl.textContent = descFile ? (descFile.content || '(No description)') : 'Description not found';
+		}
+
+		function isDescriptionFile(file){
+			return file && file.name === 'description';
+		}
 
 		// Files panel functionality
 		(function(){
@@ -475,6 +498,9 @@ function loopUser(){
 
 			window.createFileInFolder = createFileInFolder;
 		})();
+
+		// Ensure project panel is populated on load
+		updateProjectPanel();
 
 		// Code panel functionality
 		(function(){
@@ -671,7 +697,8 @@ function loopUser(){
 			// Dialog handlers
 			dialogConfirm.addEventListener('click', () => {
 				const name = dialogInput.value.trim();
-				const type = dialogType.value;
+				const dialogTypeEl = document.getElementById('dialogType');
+				const type = dialogTypeEl ? dialogTypeEl.value : 'plaintext';
 				if(name){
 					if(window.dialogMode === 'create'){
 						if(window.dialogContext === 'code'){
@@ -680,8 +707,14 @@ function loopUser(){
 							window.createFileInFolder(name, type);
 						}
 					} else if(window.dialogMode === 'rename'){
-						renameScript(name);
+						if(window.dialogContext === 'project'){
+							ProjectName = name;
+							updateProjectPanel();
+						} else {
+							renameScript(name);
+						}
 					}
+					if(dialogTypeEl) dialogTypeEl.style.display = '';
 					nameDialog.classList.remove('show');
 				}
 			});
@@ -716,15 +749,35 @@ function loopUser(){
 				});
 			});
 
-			// Save on textarea change
+			// Save on textarea change and update project description when appropriate
 			codeEditorTextarea.addEventListener('input', () => {
 				if(currentEditingFile){
 					currentEditingFile.content = codeEditorTextarea.value;
+					if(isDescriptionFile(currentEditingFile)){
+						updateProjectPanel();
+					}
 				}
 			});
 
 			// Initial render
 			renderCodeFileTree();
+
+			// Ensure project panel updates if user opens/edits description from code editor
+			const renameProjectBtn = document.getElementById('renameProjectBtn');
+			if(renameProjectBtn){
+				renameProjectBtn.addEventListener('click', () => {
+					window.dialogMode = 'rename';
+					window.dialogContext = 'project';
+					dialogTitle.textContent = 'Rename Project';
+					dialogInput.value = ProjectName;
+					dialogInput.placeholder = 'Enter new project name...';
+					const dialogTypeEl = document.getElementById('dialogType');
+					if(dialogTypeEl) dialogTypeEl.style.display = 'none';
+					nameDialog.classList.add('show');
+					dialogInput.focus();
+					dialogInput.select();
+				});
+			}
 
 			// Expose function for files panel to use
 			window.loadFileIntoEditor = function(file){
