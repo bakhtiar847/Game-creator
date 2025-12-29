@@ -506,8 +506,21 @@
 						try {
 							const content = event.target.result;
 							const projectData = JSON.parse(content);
-							console.log('Project JSON selected:', projectData);
-							// File is loaded, ready for implementation of load functionality
+							
+							// Extract filename without extension
+							const filename = file.name.replace(/\.json$/i, '');
+							
+							// Save to localStorage
+							if(projectData.fileList) {
+								localStorage.setItem(filename, JSON.stringify(projectData.fileList));
+								console.log(`Project "${filename}" imported and saved to localStorage`);
+								
+								// Redirect to the project
+								const encoded = encodeURIComponent(filename);
+								window.location.href = `?projName=${encoded}`;
+							} else {
+								alert('Invalid project format: missing fileList property');
+							}
 						} catch(err) {
 							console.error('Failed to parse JSON:', err);
 							alert('Invalid project JSON file');
