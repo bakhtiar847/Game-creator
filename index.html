@@ -284,7 +284,158 @@
 		</div>
 	</div>
 
+	<!-- Welcome modal -->
+	<div class="welcome-overlay" id="welcomeOverlay">
+		<div class="welcome-dialog">
+			<h1 class="welcome-title">Game Creator</h1>
+			<p class="welcome-subtitle">Create and manage your game projects</p>
+			
+			<div class="welcome-section">
+				<div class="welcome-buttons">
+					<button class="welcome-btn welcome-btn-primary" id="welcomeNewBtn">+ New Project</button>
+					<button class="welcome-btn welcome-btn-secondary" id="welcomeOpenBtn">📁 Open Project</button>
+				</div>
+			</div>
+
+			<div id="welcomeMainView">
+				<div class="welcome-section">
+					<div class="welcome-section-title">Recently Opened</div>
+					<div class="welcome-list" id="recentList">
+						<div class="welcome-empty">No recent projects</div>
+					</div>
+				</div>
+			</div>
+
+			<div id="welcomeNewView" style="display:none">
+				<div class="welcome-section">
+					<label style="font-size:13px;color:#e6eef8;display:block;margin-bottom:8px">Project Name</label>
+					<input type="text" id="newProjectInput" placeholder="Enter project name..." class="welcome-search" style="margin-bottom:0" />
+				</div>
+				<div style="display:flex;gap:8px">
+					<button class="welcome-btn welcome-btn-primary" id="welcomeCreateBtn" style="flex:1">Create</button>
+					<button class="welcome-back-btn" id="welcomeNewBackBtn" style="flex:0;margin-top:0">← Back</button>
+				</div>
+			</div>
+
+			<div id="welcomeOpenView" style="display:none">
+				<div class="welcome-section">
+					<input type="text" id="projectSearchInput" placeholder="Search projects..." class="welcome-search" />
+					<div class="welcome-list" id="projectList">
+						<div class="welcome-empty">No projects found</div>
+					</div>
+				</div>
+				<div style="display:flex;gap:8px">
+					<button class="welcome-btn welcome-btn-secondary" id="welcomeUploadBtn" style="flex:1">⬆ Upload JSON</button>
+					<button class="welcome-back-btn" id="welcomeOpenBackBtn">← Back</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
 	<script>
+		// Recently opened projects management
+		function getRecentProjects() {
+			const recent = localStorage.getItem('recentProjects');
+			return recent ? JSON.parse(recent) : [];
+		}
+
+		function addToRecent(projectName) {
+			const recent = getRecentProjects();
+			// Remove if already exists, add to front
+			const filtered = recent.filter(p => p !== projectName);
+			filtered.unshift(projectName);
+			// Keep only last 10
+			localStorage.setItem('recentProjects', JSON.stringify(filtered.slice(0, 10)));
+		}
+
+		function getAllProjects() {
+			const projects = [];
+			for(let i = 0; i < localStorage.length; i++) {
+				const key = localStorage.key(i);
+				// Exclude system keys
+				if(key && !['recentProjects'].includes(key)) {
+					try {
+						const data = localStorage.getItem(key);
+						if(data && data.startsWith('[')) {
+							// It's a FileList (JSON array)
+							projects.push(key);
+						}
+					} catch(e) {}
+				}
+			}
+			return projects;
+		}
+
+		// Welcome modal management
+		function showWelcome() {
+			const overlay = document.getElementById('welcomeOverlay');
+			if(overlay) {
+				overlay.classList.add('show');
+				renderRecentProjects();
+			}
+		}
+
+		function hideWelcome() {
+			const overlay = document.getElementById('welcomeOverlay');
+			if(overlay) {
+				overlay.classList.remove('show');
+			}
+		}
+
+		function renderRecentProjects() {
+			const recentList = document.getElementById('recentList');
+			const recent = getRecentProjects();
+			if(recent.length === 0) {
+				recentList.innerHTML = '<div class="welcome-empty">No recent projects</div>';
+			} else {
+				recentList.innerHTML = recent.map(name => 
+					`<div class="welcome-list-item" onclick="openProject('${name.replace(/'/g, '\\'')}')">${name}</div>`
+				).join('');
+			}
+		}
+
+		function renderAllProjects(filter = '') {
+			const projectList = document.getElementById('projectList');
+			const allProjects = getAllProjects();
+			const filtered = filter ? allProjects.filter(p => p.toLowerCase().includes(filter.toLowerCase())) : allProjects;
+			
+			if(filtered.length === 0) {
+				projectList.innerHTML = '<div class="welcome-empty">No projects found</div>';
+			} else {
+				projectList.innerHTML = filtered.map(name => 
+					`<div class="welcome-list-item" onclick="openProject('${name.replace(/'/g, '\\'')}')">${name}</div>`
+				).join('');
+			}
+		}
+
+		function openProject(projectName) {
+			addToRecent(projectName);
+			const encoded = encodeURIComponent(projectName);
+			window.location.href = `?projName=${encoded}`;
+		}
+
+		function switchWelcomeView(view) {
+			const mainView = document.getElementById('welcomeMainView');
+			const newView = document.getElementById('welcomeNewView');
+			const openView = document.getElementById('welcomeOpenView');
+
+			mainView.style.display = 'none';
+			newView.style.display = 'none';
+			openView.style.display = 'none';
+
+			if(view === 'main') {
+				mainView.style.display = 'block';
+				renderRecentProjects();
+			} else if(view === 'new') {
+				newView.style.display = 'block';
+				setTimeout(() => document.getElementById('newProjectInput').focus(), 100);
+			} else if(view === 'open') {
+				openView.style.display = 'block';
+				renderAllProjects();
+				setTimeout(() => document.getElementById('projectSearchInput').focus(), 100);
+			}
+		}
+
 		var ProjectName = "New Game Project";
 		
 		// Storage utilities
@@ -403,6 +554,8 @@ function loopUser(){
 		// Load project from URL params or storage
 		const urlParams = getURLParams();
 		let FileList;
+		let isProjectLoaded = false;
+		
 		if(urlParams.projName) {
 			ProjectName = decodeURIComponent(urlParams.projName);
 			const storedProject = localStorage.getItem(ProjectName);
@@ -410,6 +563,8 @@ function loopUser(){
 				try {
 					FileList = JSON.parse(storedProject);
 					console.log(`Loaded project "${ProjectName}" from localStorage`);
+					isProjectLoaded = true;
+					addToRecent(ProjectName);
 				} catch(err) {
 					console.error('Failed to parse stored project:', err);
 					FileList = defaultFileList;
@@ -417,9 +572,21 @@ function loopUser(){
 			} else {
 				console.log(`Project "${ProjectName}" not found in storage, using default`);
 				FileList = defaultFileList;
+				isProjectLoaded = true;
 			}
 		} else {
 			FileList = defaultFileList;
+		}
+
+		// Show welcome screen if no project is loaded
+		if(!isProjectLoaded) {
+			document.addEventListener('DOMContentLoaded', showWelcome);
+			// Also show immediately if DOM is already loaded
+			if(document.readyState === 'loading') {
+				document.addEventListener('DOMContentLoaded', showWelcome);
+			} else {
+				showWelcome();
+			}
 		}
 
 		// Helper: find description file (notes/description)
