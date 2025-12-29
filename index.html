@@ -1233,6 +1233,87 @@ ${assets}
 		style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
 		document.head.appendChild(style);
 
+		// Welcome screen event listeners
+		function setupWelcomeListeners() {
+			const welcomeNewBtn = document.getElementById('welcomeNewBtn');
+			const welcomeOpenBtn = document.getElementById('welcomeOpenBtn');
+			const welcomeCreateBtn = document.getElementById('welcomeCreateBtn');
+			const welcomeNewBackBtn = document.getElementById('welcomeNewBackBtn');
+			const welcomeOpenBackBtn = document.getElementById('welcomeOpenBackBtn');
+			const welcomeUploadBtn = document.getElementById('welcomeUploadBtn');
+			const newProjectInput = document.getElementById('newProjectInput');
+			const projectSearchInput = document.getElementById('projectSearchInput');
+
+			if(welcomeNewBtn) {
+				welcomeNewBtn.addEventListener('click', () => {
+					switchWelcomeView('new');
+				});
+			}
+
+			if(welcomeOpenBtn) {
+				welcomeOpenBtn.addEventListener('click', () => {
+					switchWelcomeView('open');
+				});
+			}
+
+			if(welcomeCreateBtn) {
+				welcomeCreateBtn.addEventListener('click', () => {
+					const name = newProjectInput.value.trim();
+					if(!name) {
+						alert('Please enter a project name');
+						return;
+					}
+					const exists = getAllProjects().includes(name);
+					if(exists) {
+						alert('A project with this name already exists. Please choose a different name.');
+						newProjectInput.value = '';
+						newProjectInput.focus();
+					} else {
+						openProject(name);
+					}
+				});
+			}
+
+			if(newProjectInput) {
+				newProjectInput.addEventListener('keypress', (e) => {
+					if(e.key === 'Enter') {
+						welcomeCreateBtn.click();
+					}
+				});
+			}
+
+			if(welcomeNewBackBtn) {
+				welcomeNewBackBtn.addEventListener('click', () => {
+					switchWelcomeView('main');
+				});
+			}
+
+			if(welcomeOpenBackBtn) {
+				welcomeOpenBackBtn.addEventListener('click', () => {
+					switchWelcomeView('main');
+				});
+			}
+
+			if(projectSearchInput) {
+				projectSearchInput.addEventListener('input', (e) => {
+					renderAllProjects(e.target.value);
+				});
+			}
+
+			if(welcomeUploadBtn) {
+				welcomeUploadBtn.addEventListener('click', () => {
+					triggerUploadDialog();
+				});
+			}
+		}
+
+		// Setup welcome listeners when DOM is ready
+		if(document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', setupWelcomeListeners);
+		} else {
+			setupWelcomeListeners();
+		}
+
 		runBtn.addEventListener('click', run);
 	</script>
 </body>
