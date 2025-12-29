@@ -781,8 +781,7 @@
 
 		let paused = false;
 
-
-		const stage = document.getElementById('stage');
+		let firstFrame = true;
 		const canvas = document.getElementById('canvas');
 		const ctx = canvas.getContext('2d');
 
@@ -1400,10 +1399,10 @@
 			lastFrame = now;
 
 			// if paused, skip physics updates but still render pause menu once
-			if(paused){ renderer.render(); requestAnimationFrame(physicsStep); return; }
+			if(paused){ if (!firstFrame) loopUser(); renderer.render(); if (firstFrame) firstFrame = false; requestAnimationFrame(physicsStep); return; }
 
 			// if climbing animation is active, skip physics updates to allow animation to control position
-			if(player._isClimbing){ renderer.render(); requestAnimationFrame(physicsStep); return; }
+			if(player._isClimbing){ if (!firstFrame) loopUser(); renderer.render(); if (firstFrame) firstFrame = false; requestAnimationFrame(physicsStep); return; }
 
 			// controls: arrows to look (adjust player rotation), WASD to move relative to player rotation
 			// camera rotation (arrow keys) — camera drives player orientation
@@ -1450,7 +1449,7 @@
 					player.radius = savedPlayerRadius;
 					// attach player to car
 					player.x = car.x; player.z = car.z; player.y = car.y + 14; player.rotY = car.rotY;
-					renderer.render(); requestAnimationFrame(physicsStep); return;
+					if (!firstFrame) loopUser(); renderer.render(); if (firstFrame) firstFrame = false; requestAnimationFrame(physicsStep); return;
 				}
 			}
 
@@ -1522,10 +1521,11 @@
 			}
 
 			// update camera and render via renderer
-			renderer.render();
+			if (!firstFrame) loopUser(); renderer.render(); if (firstFrame) firstFrame = false;
 			requestAnimationFrame(physicsStep);
 		}
 
+		initUser();
 		requestAnimationFrame(physicsStep);
 
 		// helper to get object in center of view via renderer
@@ -1814,6 +1814,14 @@
 		});
 
 		// === COMPILE/USERCODESTART ===
+
+			function initUser(){
+				// setup code can go here
+			}
+
+			function loopUser(){
+				// custom code can go here
+			}
 
 		// === COMPILE/USERCODEEND ===
 	</script>

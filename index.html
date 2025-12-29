@@ -266,7 +266,14 @@
 		const FileList = [
 			{name : "Project", type : "folder", children : [
 				{name : "Scripts", type : "folder", children : [
-					{name : "main", type : "javascript", content : "console.log('Hello, world!');"}
+					{name : "main", type : "javascript", content : `function initUser(){
+				// setup code can go here
+			}
+
+			function loopUser(){
+				// custom code can go here
+			}
+`},
 				]},
 				{name : "assets", type : "folder", children : []},
 				{name : "notes", type : "folder", children : [
