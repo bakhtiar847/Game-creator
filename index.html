@@ -388,10 +388,13 @@
 			if(recent.length === 0) {
 				recentList.innerHTML = '<div class="welcome-empty">No recent projects</div>';
 			} else {
-				recentList.innerHTML = recent.map(name => {
-					const encoded = name.replace(/"/g, '&quot;');
-					return `<div class="welcome-list-item" onclick="openProject(&quot;${encoded}&quot;)">${name}</div>`;
+				recentList.innerHTML = recent.map((name, idx) => {
+					return `<div class="welcome-list-item" data-project-index="recent-${idx}">${name}</div>`;
 				}).join('');
+				// Attach event listeners
+				recentList.querySelectorAll('.welcome-list-item').forEach((item, idx) => {
+					item.addEventListener('click', () => openProject(recent[idx]));
+				});
 			}
 		}
 
@@ -404,9 +407,13 @@
 				projectList.innerHTML = '<div class="welcome-empty">No projects found</div>';
 			} else {
 				projectList.innerHTML = filtered.map(name => {
-					const encoded = name.replace(/"/g, '&quot;');
-					return `<div class="welcome-list-item" onclick="openProject(&quot;${encoded}&quot;)">${name}</div>`;
+					return `<div class="welcome-list-item" data-project-name="${name}">${name}</div>`;
 				}).join('');
+				// Attach event listeners
+				projectList.querySelectorAll('.welcome-list-item').forEach(item => {
+					const projectName = item.getAttribute('data-project-name');
+					item.addEventListener('click', () => openProject(projectName));
+				});
 			}
 		}
 
