@@ -336,7 +336,14 @@
 			input.click();
 		}
 
-		const FileList = [
+		// Parse URL parameters
+		function getURLParams() {
+			const params = new URLSearchParams(window.location.search);
+			return Object.fromEntries(params);
+		}
+
+		// Initialize default FileList
+		let defaultFileList = [
 			{name : "Project", type : "folder", children : [
 				{name : "Scripts", type : "folder", children : [
 					{name : "main", type : "javascript", content : 
@@ -359,6 +366,28 @@ function loopUser(){
 				{name : "settings", type : "folder", children : []}
 			]}
 			];
+
+		// Load project from URL params or storage
+		const urlParams = getURLParams();
+		let FileList;
+		if(urlParams.projName) {
+			ProjectName = decodeURIComponent(urlParams.projName);
+			const storedProject = localStorage.getItem(ProjectName);
+			if(storedProject) {
+				try {
+					FileList = JSON.parse(storedProject);
+					console.log(`Loaded project "${ProjectName}" from localStorage`);
+				} catch(err) {
+					console.error('Failed to parse stored project:', err);
+					FileList = defaultFileList;
+				}
+			} else {
+				console.log(`Project "${ProjectName}" not found in storage, using default`);
+				FileList = defaultFileList;
+			}
+		} else {
+			FileList = defaultFileList;
+		}
 
 		// Helper: find description file (notes/description)
 		function findDescriptionFile(){
