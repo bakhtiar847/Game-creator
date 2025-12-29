@@ -388,9 +388,10 @@
 			if(recent.length === 0) {
 				recentList.innerHTML = '<div class="welcome-empty">No recent projects</div>';
 			} else {
-				recentList.innerHTML = recent.map(name => 
-					`<div class="welcome-list-item" onclick="openProject('${name.replace(/'/g, '\\'')}')">${name}</div>`
-				).join('');
+				recentList.innerHTML = recent.map(name => {
+					const encoded = name.replace(/"/g, '&quot;');
+					return `<div class="welcome-list-item" onclick="openProject(&quot;${encoded}&quot;)">${name}</div>`;
+				}).join('');
 			}
 		}
 
@@ -402,9 +403,10 @@
 			if(filtered.length === 0) {
 				projectList.innerHTML = '<div class="welcome-empty">No projects found</div>';
 			} else {
-				projectList.innerHTML = filtered.map(name => 
-					`<div class="welcome-list-item" onclick="openProject('${name.replace(/'/g, '\\'')}')">${name}</div>`
-				).join('');
+				projectList.innerHTML = filtered.map(name => {
+					const encoded = name.replace(/"/g, '&quot;');
+					return `<div class="welcome-list-item" onclick="openProject(&quot;${encoded}&quot;)">${name}</div>`;
+				}).join('');
 			}
 		}
 
