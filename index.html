@@ -140,7 +140,29 @@
 		.modal-btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#032024}
 		.modal-btn-primary:hover{opacity:0.9}
 		.modal-btn-secondary{background:rgba(255,255,255,0.05);color:#e6eef8;border:1px solid rgba(255,255,255,0.1)}
-		.modal-btn-secondary:hover{background:rgba(255,255,255,0.1)}
+		/* Welcome modal */
+		.welcome-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:200;align-items:center;justify-content:center}
+		.welcome-overlay.show{display:flex}
+		.welcome-dialog{background:linear-gradient(180deg,var(--panel),#0f1724);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:32px;min-width:500px;max-width:700px;box-shadow:0 20px 60px rgba(0,0,0,0.8)}
+		.welcome-title{font-size:28px;font-weight:700;color:#f8fdff;margin:0 0 8px 0}
+		.welcome-subtitle{font-size:14px;color:var(--muted);margin-bottom:24px}
+		.welcome-section{margin-bottom:24px}
+		.welcome-section-title{font-size:13px;font-weight:600;color:#e6eef8;margin-bottom:12px}
+		.welcome-buttons{display:flex;gap:12px;margin-bottom:24px}
+		.welcome-btn{flex:1;padding:12px 16px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:14px;transition:all .15s ease}
+		.welcome-btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#032024}
+		.welcome-btn-primary:hover{opacity:0.9}
+		.welcome-btn-secondary{background:rgba(255,255,255,0.05);color:#e6eef8;border:1px solid rgba(255,255,255,0.1)}
+		.welcome-btn-secondary:hover{background:rgba(255,255,255,0.1)}
+		.welcome-list{background:rgba(0,0,0,0.2);border-radius:8px;max-height:200px;overflow-y:auto;border:1px solid rgba(255,255,255,0.05)}
+		.welcome-list-item{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.02);cursor:pointer;color:#e6eef8;font-size:13px;transition:all .15s ease}
+		.welcome-list-item:hover{background:rgba(255,255,255,0.05)}
+		.welcome-list-item:last-child{border-bottom:none}
+		.welcome-empty{padding:20px;text-align:center;color:var(--muted);font-size:13px}
+		.welcome-search{width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;font-size:13px;margin-bottom:12px;font-family:inherit}
+		.welcome-search::placeholder{color:var(--muted)}
+		.welcome-back-btn{background:rgba(255,255,255,0.05);color:#e6eef8;border:1px solid rgba(255,255,255,0.1);padding:10px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;margin-top:12px}
+		.welcome-back-btn:hover{background:rgba(255,255,255,0.1)}
 	</style>
 </head>
 <body>
