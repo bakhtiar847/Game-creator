@@ -154,8 +154,9 @@
 				<div class="dropdown-panel" id="projPanel" role="menu" aria-label="Project details">
 					<div class="proj-title" id="projTitle">Loading...</div>
 					<div class="proj-meta"><div id="projDescription" style="margin-top:8px">Description is loading...</div></div>
-					<div style="margin-top:12px">
-						<button id="renameProjectBtn" class="modal-btn modal-btn-primary">Rename</button>
+					<div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+						<button id="downloadProjectBtn" class="modal-btn modal-btn-primary" style="width:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));">⬇ Download as JSON</button>
+						<button id="uploadProjectBtn" class="modal-btn modal-btn-secondary" style="width:100%;background:rgba(255,255,255,0.05);color:#e6eef8;border:1px solid rgba(255,255,255,0.1)">⬆ Upload JSON</button>
 					</div>
 				</div>
 			</div>
@@ -263,6 +264,79 @@
 
 	<script>
 		var ProjectName = "New Game Project";
+		
+		// Storage utilities
+		function saveProjectToStorage() {
+			const storageKey = ProjectName;
+			try {
+				localStorage.setItem(storageKey, JSON.stringify(FileList));
+				console.log(`Project "${ProjectName}" saved to localStorage`);
+			} catch(err) {
+				console.error('Failed to save project to localStorage:', err);
+			}
+		}
+
+		function renameProjectInStorage(oldName, newName) {
+			try {
+				const projectData = localStorage.getItem(oldName);
+				if(projectData) {
+					localStorage.setItem(newName, projectData);
+					localStorage.removeItem(oldName);
+					console.log(`Project renamed from "${oldName}" to "${newName}" in localStorage`);
+				}
+			} catch(err) {
+				console.error('Failed to rename project in localStorage:', err);
+			}
+		}
+
+		function downloadProjectAsJSON() {
+			try {
+				const projectData = {
+					name: ProjectName,
+					fileList: FileList,
+					exportDate: new Date().toISOString()
+				};
+				const jsonString = JSON.stringify(projectData, null, 2);
+				const blob = new Blob([jsonString], { type: 'application/json' });
+				const url = URL.createObjectURL(blob);
+				const link = document.createElement('a');
+				link.href = url;
+				link.download = `${ProjectName.replace(/\s+/g, '_')}_${Date.now()}.json`;
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
+				URL.revokeObjectURL(url);
+			} catch(err) {
+				console.error('Failed to download project:', err);
+				alert('Failed to download project');
+			}
+		}
+
+		function triggerUploadDialog() {
+			const input = document.createElement('input');
+			input.type = 'file';
+			input.accept = '.json';
+			input.addEventListener('change', (e) => {
+				const file = e.target.files[0];
+				if(file) {
+					const reader = new FileReader();
+					reader.onload = (event) => {
+						try {
+							const content = event.target.result;
+							const projectData = JSON.parse(content);
+							console.log('Project JSON selected:', projectData);
+							// File is loaded, ready for implementation of load functionality
+						} catch(err) {
+							console.error('Failed to parse JSON:', err);
+							alert('Invalid project JSON file');
+						}
+					};
+					reader.readAsText(file);
+				}
+			});
+			input.click();
+		}
+
 		const FileList = [
 			{name : "Project", type : "folder", children : [
 				{name : "Scripts", type : "folder", children : [
@@ -494,6 +568,7 @@ function loopUser(){
 				} else {
 					renderFileList(currentFolder.children);
 				}
+				saveProjectToStorage();
 			}
 
 			window.createFileInFolder = createFileInFolder;
@@ -666,6 +741,7 @@ function loopUser(){
 							codeEditorHeader.textContent = 'Select a file to edit';
 							codeEditorTextarea.value = '';
 						}
+						saveProjectToStorage();
 					}
 				}
 			}
@@ -681,6 +757,7 @@ function loopUser(){
 					}
 					scripts.children.push(newItem);
 					renderCodeFileTree();
+					saveProjectToStorage();
 				}
 			}
 
@@ -691,6 +768,7 @@ function loopUser(){
 					currentEditingFile.name = newName;
 					codeEditorHeader.textContent = newName;
 					renderCodeFileTree();
+					saveProjectToStorage();
 				}
 			}
 
@@ -708,7 +786,9 @@ function loopUser(){
 						}
 					} else if(window.dialogMode === 'rename'){
 						if(window.dialogContext === 'project'){
+							const oldName = ProjectName;
 							ProjectName = name;
+							renameProjectInStorage(oldName, name);
 							updateProjectPanel();
 						} else {
 							renameScript(name);
@@ -756,6 +836,7 @@ function loopUser(){
 					if(isDescriptionFile(currentEditingFile)){
 						updateProjectPanel();
 					}
+					saveProjectToStorage();
 				}
 			});
 
@@ -794,6 +875,9 @@ function loopUser(){
 		(function(){
 			const toggle = document.getElementById('projToggle');
 			const panel = document.getElementById('projPanel');
+			const downloadBtn = document.getElementById('downloadProjectBtn');
+			const uploadBtn = document.getElementById('uploadProjectBtn');
+
 			toggle.addEventListener('click', e=>{
 				const show = !panel.classList.contains('show');
 				panel.classList.toggle('show', show);
@@ -804,6 +888,18 @@ function loopUser(){
 					panel.classList.remove('show');
 					toggle.setAttribute('aria-expanded','false');
 				}
+			});
+
+			// Download button
+			downloadBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				downloadProjectAsJSON();
+			});
+
+			// Upload button
+			uploadBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				triggerUploadDialog();
 			});
 		})();
 
