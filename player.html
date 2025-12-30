@@ -109,6 +109,30 @@
 			}
 		}
 
+		// Abstract tool-like inventory item: register commands and perform them
+		class ToolItem extends InventoryItem {
+			constructor(id, name, qty = 1, worldClass = null){
+				super(id, name, qty, worldClass);
+				// commands: key -> { name, handler }
+				this.commands = {};
+			}
+
+			registerCommand(key, displayName, handler){
+				this.commands[key] = { name: displayName, handler };
+			}
+
+			// perform a command by key; returns true when executed
+			perform(key, target){
+				const cmd = this.commands[key];
+				if(!cmd) return false;
+				try{ cmd.handler.call(this, target); return true; }catch(err){ console.warn('Tool command failed', err); return false; }
+			}
+
+			getAvailableCommands(){
+				return Object.keys(this.commands).map(k=>({ key:k, name:this.commands[k].name }));
+			}
+		}
+
 		let objects = [
 			{
 				id:1,
@@ -628,7 +652,14 @@
 		// Inventory-specific item classes
 		class GoldItem extends InventoryItem { constructor(qty=1, worldClass=null){ super('gold','Gold',qty, worldClass); } }
 		class WoodItem extends InventoryItem { constructor(qty=1, worldClass=null){ super('wood','Wood',qty, worldClass); } }
-		class AxeItem extends InventoryItem { constructor(qty=1, worldClass=null){ super('axe','Axe',qty, worldClass); this.equipable = true; } }
+		class AxeItem extends ToolItem {
+			constructor(qty=1, worldClass=null){
+				super('axe','Axe',qty, worldClass);
+				this.equipable = true;
+				// register a default 'use' command that delegates to the existing Axe tool logic
+				this.registerCommand('use', 'Use Axe', (target) => { Axe.useOn(target); });
+			}
+		}
 
 		// World representations for inventory items
 		class GoldWorld extends WorldObject {
