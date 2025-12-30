@@ -1181,10 +1181,13 @@ function loopUser(){
 			const scripts = PrepareScripts();
 			const assets = PrepareAssets();
 			// Return code that will execute all scripts
-			return `(function() {
+			return `
 ${scripts}
+
+// COMPILE/ASSETDATASTART
+
 ${assets}
-})();`;
+`;
 		}
 
 		function PrepareScripts(){

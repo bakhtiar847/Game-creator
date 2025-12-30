@@ -100,7 +100,13 @@
 		}
 
 		class InventoryItem {
-			constructor(id, name, qty = 1){ this.id = id; this.name = name; this.qty = qty; }
+			constructor(id, name, qty = 1, worldClass = null){
+				this.id = id;
+				this.name = name;
+				this.qty = qty;
+				// pointer to the world-class/constructor used when dropping this item
+				this.worldClass = worldClass;
+			}
 		}
 
 		let objects = [
@@ -485,7 +491,7 @@
 					if(!this.opened){
 						this.opened = true; this.lidTarget = Math.PI * 0.65;
 						// give sample gold once when first opened (legacy behavior)
-						if(!this.collected){ this.collected = true; const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new InventoryItem('gold','Gold',1)); showPickup('Picked up Gold'); saveState(); }
+						if(!this.collected){ this.collected = true; const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new GoldItem(1, GoldWorld)); showPickup('Picked up Gold'); saveState(); }
 						// show chest GUI via instance method
 						this.showUI();
 					} else {
@@ -605,7 +611,13 @@
 					const takeQty = Math.min(item.qty, qty);
 					const invExisting = inventory.find(i=>i.id === item.id);
 					if(invExisting) invExisting.qty = (invExisting.qty||0) + takeQty;
-					else inventory.push({ id: item.id, name: item.name, qty: takeQty });
+					else {
+						// create typed inventory items when possible so they carry world pointers
+						if(item.id === 'gold') inventory.push(new GoldItem(takeQty, GoldWorld));
+						else if(item.id === 'wood') inventory.push(new WoodItem(takeQty, WoodWorld));
+						else if(item.id === 'axe') inventory.push(new AxeItem(takeQty, AxeWorld));
+						else inventory.push({ id: item.id, name: item.name, qty: takeQty });
+					}
 					item.qty -= takeQty; if(item.qty <= 0) this.contents.splice(chestIndex,1);
 					showPickup(`Took ${takeQty} x ${item.name} from chest`);
 					saveState(); refresh();
@@ -614,28 +626,85 @@
 			}
 
 		// Inventory-specific item classes
-		class GoldItem extends InventoryItem { constructor(qty=1){ super('gold','Gold',qty); } }
-		class WoodItem extends InventoryItem { constructor(qty=1){ super('wood','Wood',qty); } }
-		class AxeItem extends InventoryItem { constructor(qty=1){ super('axe','Axe',qty); this.equipable = true; } }
+		class GoldItem extends InventoryItem { constructor(qty=1, worldClass=null){ super('gold','Gold',qty, worldClass); } }
+		class WoodItem extends InventoryItem { constructor(qty=1, worldClass=null){ super('wood','Wood',qty, worldClass); } }
+		class AxeItem extends InventoryItem { constructor(qty=1, worldClass=null){ super('axe','Axe',qty, worldClass); this.equipable = true; } }
 
 		// World representations for inventory items
 		class GoldWorld extends WorldObject {
-			constructor(data){ super(data); this.actions = this.actions || []; this.actions.push({ key:'q', name:'pickup' }); }
-			open(){ const existing = inventory.find(it=>it.id==='gold'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new GoldItem(1)); showPickup('Picked up Gold'); saveState(); // remove world object
-				const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh(); }
-			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const g = new GoldWorld({ id, name:'Gold', x,y,z, color:'#ffd700', world, isworld:false, iswall:false }); g.tetrahedrons = [ { a:{x:x-6,y:0,z:z-6}, b:{x:x+6,y:0,z:z-6}, c:{x:x+6,y:12,z:z+6}, d:{x:x-6,y:12,z:z+6} } ]; objects.push(g); return g; }
+			constructor(data){
+				super(data);
+				this.actions = this.actions || [];
+				this.actions.push({ key:'q', name:'pickup' });
+				// pointer to inventory item constructor (set by spawn)
+				this.inventoryItemConstructor = data && data.inventoryItemConstructor || null;
+			}
+			open(){
+				const ItemCtor = this.inventoryItemConstructor || GoldItem;
+				if(!ItemCtor) return;
+				const existing = inventory.find(it=>it.id==='gold');
+				if(existing) existing.qty = (existing.qty||0)+1;
+				else inventory.push(new ItemCtor(1, this.constructor));
+				showPickup('Picked up Gold'); saveState();
+				const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh();
+			}
+			static spawn(x,y,z,world=0){
+				const id = Date.now()+Math.floor(Math.random()*1000);
+				const g = new GoldWorld({ id, name:'Gold', x,y,z, color:'#ffd700', world, isworld:false, iswall:false });
+				g.inventoryItemConstructor = GoldItem;
+				g.tetrahedrons = [ { a:{x:x-6,y:0,z:z-6}, b:{x:x+6,y:0,z:z-6}, c:{x:x+6,y:12,z:z+6}, d:{x:x-6,y:12,z:z+6} } ];
+				objects.push(g); return g;
+			}
 		}
 
 		class WoodWorld extends WorldObject {
-			constructor(data){ super(data); this.actions = this.actions || []; this.actions.push({ key:'q', name:'pickup' }); }
-			open(){ const existing = inventory.find(it=>it.id==='wood'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new WoodItem(1)); showPickup('Picked up Wood'); saveState(); const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh(); }
-			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const w = new WoodWorld({ id, name:'Wood', x,y,z, color:'#8B5A2B', world, isworld:false, iswall:false }); w.tetrahedrons=[{a:{x:x-6,y:0,z:z-6},b:{x:x+6,y:0,z:z-6},c:{x:x+6,y:12,z:z+6},d:{x:x-6,y:12,z:z+6}}]; objects.push(w); return w; }
+			constructor(data){
+				super(data);
+				this.actions = this.actions || [];
+				this.actions.push({ key:'q', name:'pickup' });
+				this.inventoryItemConstructor = data && data.inventoryItemConstructor || null;
+			}
+			open(){
+				const ItemCtor = this.inventoryItemConstructor || WoodItem;
+				if(!ItemCtor) return;
+				const existing = inventory.find(it=>it.id==='wood');
+				if(existing) existing.qty = (existing.qty||0)+1;
+				else inventory.push(new ItemCtor(1, this.constructor));
+				showPickup('Picked up Wood'); saveState();
+				const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh();
+			}
+			static spawn(x,y,z,world=0){
+				const id = Date.now()+Math.floor(Math.random()*1000);
+				const w = new WoodWorld({ id, name:'Wood', x,y,z, color:'#8B5A2B', world, isworld:false, iswall:false });
+				w.inventoryItemConstructor = WoodItem;
+				w.tetrahedrons=[{a:{x:x-6,y:0,z:z-6},b:{x:x+6,y:0,z:z-6},c:{x:x+6,y:12,z:z+6},d:{x:x-6,y:12,z:z+6}}];
+				objects.push(w); return w;
+			}
 		}
 
 		class AxeWorld extends WorldObject {
-			constructor(data){ super(data); this.actions = this.actions || []; this.actions.push({ key:'q', name:'pickup' }); }
-			open(){ const existing = inventory.find(it=>it.id==='axe'); if(existing) existing.qty = (existing.qty||0)+1; else inventory.push(new AxeItem(1)); showPickup('Picked up Axe'); saveState(); const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh(); }
-			static spawn(x,y,z,world=0){ const id = Date.now()+Math.floor(Math.random()*1000); const a = new AxeWorld({ id, name:'Axe', x,y,z, color:'#c68642', world, isworld:false, iswall:false }); a.tetrahedrons=[{a:{x:x-6,y:0,z:z-6},b:{x:x+6,y:0,z:z-6},c:{x:x+6,y:20,z:z+6},d:{x:x-6,y:20,z:z+6}}]; objects.push(a); return a; }
+			constructor(data){
+				super(data);
+				this.actions = this.actions || [];
+				this.actions.push({ key:'q', name:'pickup' });
+				this.inventoryItemConstructor = data && data.inventoryItemConstructor || null;
+			}
+			open(){
+				const ItemCtor = this.inventoryItemConstructor || AxeItem;
+				if(!ItemCtor) return;
+				const existing = inventory.find(it=>it.id==='axe');
+				if(existing) existing.qty = (existing.qty||0)+1;
+				else inventory.push(new ItemCtor(1, this.constructor));
+				showPickup('Picked up Axe'); saveState();
+				const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh();
+			}
+			static spawn(x,y,z,world=0){
+				const id = Date.now()+Math.floor(Math.random()*1000);
+				const a = new AxeWorld({ id, name:'Axe', x,y,z, color:'#c68642', world, isworld:false, iswall:false });
+				a.inventoryItemConstructor = AxeItem;
+				a.tetrahedrons=[{a:{x:x-6,y:0,z:z-6},b:{x:x+6,y:0,z:z-6},c:{x:x+6,y:20,z:z+6},d:{x:x-6,y:20,z:z+6}}];
+				objects.push(a); return a;
+			}
 		}
 
 		// Axe tool logic (encapsulates cutting)
@@ -645,7 +714,7 @@
 				if(target.name && target.name.toLowerCase().includes('tree')){
 					// give wood and remove tree
 					const existing = inventory.find(it=>it.id === 'wood');
-					if(existing) existing.qty = (existing.qty||0) + 1; else inventory.push(new WoodItem(1));
+					if(existing) existing.qty = (existing.qty||0) + 1; else inventory.push(new WoodItem(1, WoodWorld));
 					// remove trunk and nearby canopy as before
 					const idx = objects.findIndex(o=>o.id === target.id);
 					if(idx>=0){
@@ -668,78 +737,78 @@
 		}
 
 			// Car world object: simple driveable box. I: accelerate, K: brake, J/L: steer, O: toggle reverse, Q: enter/exit
-			class Car extends WorldObject {
-				constructor(data){
-					super(data);
-					this.actions = this.actions || [];
-					this.actions.push({ key:'q', name:'enter' });
-					this._driver = null;
-					this._reverse = false;
-					this.speedForward = 0;
-					this.accel = data && data.accel || 420;
-					this.maxSpeed = data && data.maxSpeed || 320;
-					this.steerSpeed = data && data.steerSpeed || 2.8;
-					this.rotY = data && data.rotY || 0;
-					this._dims = data && data._dims || { hx:30, hy:12, hz:18 };
-				}
-
-				open(){
-					// toggle enter/exit
-					if(this._driver){
-						const p = objects.find(o=>o.id === this._driver);
-						if(p){ p._inVehicle = null; const offset = (this._dims.hz || 18) + (p.radius||28) + 6; p.x = this.x - Math.sin(this.rotY) * offset; p.z = this.z - Math.cos(this.rotY) * offset; p.y = this.y; }
-						this._driver = null; showPickup('Exited car');
-						// hide driving overlay when exiting
-						const __el = document.getElementById('driveOverlay'); if(__el){ __el.style.display = 'none'; driveOverlayVisible = false; driveOverlaySeen = true; }
-					} else {
-						this._driver = player.id; player._inVehicle = this.id; player.vel.y = 0; player.onGround = true; showPickup('Entered car');
-						// show driving help overlay when entering
-						const _el = document.getElementById('driveOverlay'); if(_el){ _el.style.display = ''; driveOverlayVisible = true; }
-					}
-					saveState();
-				}
-
-				update(dt){ /* car-specific stepping happens in main physics loop */ }
-
-				static spawn(x,y,z,world=0, opts={}){
-					const id = Date.now()+Math.floor(Math.random()*1000);
-					const car = new Car(Object.assign({ id, name: opts.name || 'Car', x, y, z, color: opts.color || '#2b6f9b', world, isworld:true, iswall:false }, opts));
-					const hx = (opts.hx || 30), hy = (opts.hy || 12), hz = (opts.hz || 18);
-					car._dims = {hx,hy,hz};
-					// approximate box with a few tetrahedrons
-					const a = {x:x-hx,y:y,z:z-hz}, b={x:x+hx,y:y,z:z-hz}, c={x:x-hx,y:y,z:z+hz}, d={x:x+hx,y:y,z:z+hz};
-					const e={x:x-hx,y:y+2*hy,z:z-hz}, f={x:x+hx,y:y+2*hy,z:z-hz}, g={x:x-hx,y:y+2*hy,z:z+hz}, h={x:x+hx,y:y+2*hy,z:z+hz};
-					car.tetrahedrons = [ {a:a,b:b,c:c,d:e}, {a:b,b:d,c:h,d:f}, {a:b,b:f,c:e,d:h}, {a:c,b:e,c:g,d:h}, {a:b,b:c,c:e,d:h} ];
-					// also create simple surface triangles for nicer flat-shaded rendering
-					const verts = [
-						{ x: x-hx, y: y, z: z-hz }, //0 a
-						{ x: x+hx, y: y, z: z-hz }, //1 b
-						{ x: x-hx, y: y, z: z+hz }, //2 c
-						{ x: x+hx, y: y, z: z+hz }, //3 d
-						{ x: x-hx, y: y+2*hy, z: z-hz }, //4 e
-						{ x: x+hx, y: y+2*hy, z: z-hz }, //5 f
-						{ x: x-hx, y: y+2*hy, z: z+hz }, //6 g
-						{ x: x+hx, y: y+2*hy, z: z+hz }  //7 h
-					];
-					car._baseTris = [
-						// bottom
-						[ verts[0], verts[1], verts[2] ], [ verts[1], verts[3], verts[2] ],
-						// top
-						[ verts[4], verts[6], verts[5] ], [ verts[5], verts[6], verts[7] ],
-						// front/back
-						[ verts[2], verts[3], verts[6] ], [ verts[3], verts[7], verts[6] ],
-						[ verts[0], verts[4], verts[1] ], [ verts[1], verts[4], verts[5] ],
-						// left/right
-						[ verts[0], verts[2], verts[4] ], [ verts[2], verts[6], verts[4] ],
-						[ verts[1], verts[5], verts[3] ], [ verts[3], verts[5], verts[7] ]
-					];
-					car.speedForward = 0; car._reverse = false;
-					objects.push(car);
-					return car;
-				}
+		class Car extends WorldObject {
+			constructor(data){
+				super(data);
+				this.actions = this.actions || [];
+				this.actions.push({ key:'q', name:'enter' });
+				this._driver = null;
+				this._reverse = false;
+				this.speedForward = 0;
+				this.accel = data && data.accel || 420;
+				this.maxSpeed = data && data.maxSpeed || 320;
+				this.steerSpeed = data && data.steerSpeed || 2.8;
+				this.rotY = data && data.rotY || 0;
+				this._dims = data && data._dims || { hx:30, hy:12, hz:18 };
 			}
 
-			// convert any existing chest-like objects into Chest instances (remove originals)
+			open(){
+				// toggle enter/exit
+				if(this._driver){
+					const p = objects.find(o=>o.id === this._driver);
+					if(p){ p._inVehicle = null; const offset = (this._dims.hz || 18) + (p.radius||28) + 6; p.x = this.x - Math.sin(this.rotY) * offset; p.z = this.z - Math.cos(this.rotY) * offset; p.y = this.y; }
+					this._driver = null; showPickup('Exited car');
+					// hide driving overlay when exiting
+					const __el = document.getElementById('driveOverlay'); if(__el){ __el.style.display = 'none'; driveOverlayVisible = false; driveOverlaySeen = true; }
+				} else {
+					this._driver = player.id; player._inVehicle = this.id; player.vel.y = 0; player.onGround = true; showPickup('Entered car');
+					// show driving help overlay when entering
+					const _el = document.getElementById('driveOverlay'); if(_el){ _el.style.display = ''; driveOverlayVisible = true; }
+				}
+				saveState();
+			}
+
+			update(dt){ /* car-specific stepping happens in main physics loop */ }
+
+			static spawn(x,y,z,world=0, opts={}){
+				const id = Date.now()+Math.floor(Math.random()*1000);
+				const car = new Car(Object.assign({ id, name: opts.name || 'Car', x, y, z, color: opts.color || '#2b6f9b', world, isworld:true, iswall:false }, opts));
+				const hx = (opts.hx || 30), hy = (opts.hy || 12), hz = (opts.hz || 18);
+				car._dims = {hx,hy,hz};
+				// approximate box with a few tetrahedrons
+				const a = {x:x-hx,y:y,z:z-hz}, b={x:x+hx,y:y,z:z-hz}, c={x:x-hx,y:y,z:z+hz}, d={x:x+hx,y:y,z:z+hz};
+				const e={x:x-hx,y:y+2*hy,z:z-hz}, f={x:x+hx,y:y+2*hy,z:z-hz}, g={x:x-hx,y:y+2*hy,z:z+hz}, h={x:x+hx,y:y+2*hy,z:z+hz};
+				car.tetrahedrons = [ {a:a,b:b,c:c,d:e}, {a:b,b:d,c:h,d:f}, {a:b,b:f,c:e,d:h}, {a:c,b:e,c:g,d:h}, {a:b,b:c,c:e,d:h} ];
+				// also create simple surface triangles for nicer flat-shaded rendering
+				const verts = [
+					{ x: x-hx, y: y, z: z-hz }, //0 a
+					{ x: x+hx, y: y, z: z-hz }, //1 b
+					{ x: x-hx, y: y, z: z+hz }, //2 c
+					{ x: x+hx, y: y, z: z+hz }, //3 d
+					{ x: x-hx, y: y+2*hy, z: z-hz }, //4 e
+					{ x: x+hx, y: y+2*hy, z: z-hz }, //5 f
+					{ x: x-hx, y: y+2*hy, z: z+hz }, //6 g
+					{ x: x+hx, y: y+2*hy, z: z+hz }  //7 h
+				];
+				car._baseTris = [
+					// bottom
+					[ verts[0], verts[1], verts[2] ], [ verts[1], verts[3], verts[2] ],
+					// top
+					[ verts[4], verts[6], verts[5] ], [ verts[5], verts[6], verts[7] ],
+					// front/back
+					[ verts[2], verts[3], verts[6] ], [ verts[3], verts[7], verts[6] ],
+					[ verts[0], verts[4], verts[1] ], [ verts[1], verts[4], verts[5] ],
+					// left/right
+					[ verts[0], verts[2], verts[4] ], [ verts[2], verts[6], verts[4] ],
+					[ verts[1], verts[5], verts[3] ], [ verts[3], verts[5], verts[7] ]
+				];
+				car.speedForward = 0; car._reverse = false;
+				objects.push(car);
+				return car;
+			}
+		}
+
+		// convert any existing chest-like objects into Chest instances (remove originals)
 		for(let i=objects.length-1;i>=0;i--){
 			const o = objects[i];
 			if(o.name && o.name.toLowerCase() === 'chest'){
@@ -1670,7 +1739,7 @@
 		loadState();
 
 		// Spawn initial world objects (moved into a single function)
-		function spawnWorld(){
+		function spawnSampleWorld(){
 			// Trees
 			Tree.spawn(420, 600, 0);
 			Tree.spawn(240, 700, 0);
@@ -1689,7 +1758,7 @@
 			Car.spawn(380,0,500,0, { name: 'Car', color: '#2b6f9b' });
 		}
 		// call spawnWorld to populate the scene
-		spawnWorld();
+		spawnSampleWorld();
 
 
 		function renderList(){
@@ -1774,7 +1843,9 @@
 			// spawn a specific world object based on the inventory item type
 			const rot = player.rotY || 0; const fx = Math.sin(rot), fz = Math.cos(rot);
 			const ox = player.x + fx * 60; const oz = player.z + fz * 60; const oy = Math.max(0, player.y);
-			if(it.id === 'gold'){
+			if(it && it.worldClass && typeof it.worldClass.spawn === 'function'){
+				it.worldClass.spawn(ox, oy, oz, player.world);
+			} else if(it.id === 'gold'){
 				GoldWorld.spawn(ox, oy, oz, player.world);
 			}else if(it.id === 'wood'){
 				WoodWorld.spawn(ox, oy, oz, player.world);
