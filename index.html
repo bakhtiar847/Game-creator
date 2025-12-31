@@ -251,9 +251,12 @@
 
 				<!-- Center: Library -->
 				<div class="assets-library" id="assetsLibrary">
-					<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+					<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
 						<div style="font-weight:600;color:#f8fdff;font-size:13px">Library</div>
-						<button class="open-btn" id="uploadAssetBtn">Upload</button>
+						<div style="display:flex;gap:6px">
+							<button class="open-btn" id="uploadAssetBtn" style="flex:1;padding:6px 12px;font-size:12px">Upload</button>
+							<button class="open-btn" id="newAssetBtn" style="flex:1;padding:6px 12px;font-size:12px">+ Asset</button>
+						</div>
 					</div>
 					<div class="assets-grid" id="assetsGrid">
 						<div class="asset-item" data-asset="sample1" data-type="images">
@@ -278,7 +281,10 @@
 				<div class="assets-preview" id="assetsPreview">
 					<div class="preview-header">Preview</div>
 					<div class="preview-content" id="assetsPreviewContent">Select an asset to preview</div>
-					<button class="open-btn" id="assetsOpenBtn" disabled>Open</button>
+					<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">
+						<button class="open-btn" id="assetsOpenBtn" disabled>Open in Editor</button>
+						<button class="open-btn" id="assetsDownloadBtn" disabled style="background:rgba(255,255,255,0.05);color:#e6eef8">Download JSON</button>
+					</div>
 				</div>
 			</div>
 		</section>
@@ -340,6 +346,36 @@
 			<p class="muted">Project and editor settings.</p>
 		</section>
 	</main>
+
+	<!-- Asset Upload Dialog -->
+	<div class="modal-overlay" id="assetUploadDialog" style="display:none">
+		<div class="modal-dialog" style="min-width:400px;max-width:500px">
+			<h3>Upload Asset(s)</h3>
+			<p style="color:var(--muted);font-size:13px;margin:12px 0">Upload JSON asset files or a folder containing multiple assets.</p>
+			<div style="margin-bottom:16px">
+				<div id="assetDropZone" style="border:2px dashed rgba(255,255,255,0.2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .2s">
+					<div style="font-size:32px;margin-bottom:8px">📁</div>
+					<div style="color:#e6eef8;font-weight:600;margin-bottom:4px">Drop files here or click to browse</div>
+					<div style="font-size:12px;color:var(--muted)">JSON files or folder of JSONs</div>
+				</div>
+				<input type="file" id="assetFileInput" style="display:none" accept=".json" multiple />
+				<input type="file" id="assetFolderInput" style="display:none" webkitdirectory directory />
+			</div>
+			<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-bottom:16px">
+				<span style="font-size:13px;color:var(--muted)">Or create new:</span>
+				<div style="display:flex;gap:6px">
+					<button id="assetNewObjectBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Object</button>
+					<button id="assetNewInventoryBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Inventory Item</button>
+					<button id="assetNewToolBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Tool</button>
+				</div>
+			</div>
+			<div id="assetUploadList" style="max-height:200px;overflow-y:auto;margin-bottom:16px;background:rgba(0,0,0,0.2);border-radius:6px;padding:8px"></div>
+			<div style="display:flex;gap:8px;justify-content:flex-end">
+				<button class="modal-btn modal-btn-secondary" onclick="document.getElementById('assetUploadDialog').classList.remove('show')">Cancel</button>
+				<button id="assetUploadConfirmBtn" class="modal-btn modal-btn-primary">Import Assets</button>
+			</div>
+		</div>
+	</div>
 
 	<!-- Dialog for naming -->
 	<div class="modal-overlay" id="nameDialog">
@@ -981,27 +1017,238 @@ function loopUser(){
 				previewEl.style.flex = '0 0 ' + newWidth + 'px';
 			});
 
-			// Asset selection handling
-			assetsGrid.addEventListener('click', (e) => {
-				const assetItem = e.target.closest('.asset-item');
-				if(!assetItem) return;
-				document.querySelectorAll('#assetsGrid .asset-item').forEach(it => it.classList.remove('selected'));
-				assetItem.classList.add('selected');
-				assetsPreviewContent.textContent = 'Previewing: ' + (assetItem.dataset.asset || assetItem.textContent.trim());
-				assetsOpenBtn.disabled = false;
-			});
+// Asset management state
+		let assetsToUpload = [];
+		let selectedAssetId = null;
 
-			// Simple upload - add placeholder asset
-			uploadAssetBtn.addEventListener('click', () => {
-				const name = prompt('Asset name');
-				if(!name) return;
+		// Asset upload dialog handlers
+		const assetDropZone = document.getElementById('assetDropZone');
+		const assetFileInput = document.getElementById('assetFileInput');
+		const assetFolderInput = document.getElementById('assetFolderInput');
+		const assetUploadDialog = document.getElementById('assetUploadDialog');
+		const assetUploadList = document.getElementById('assetUploadList');
+		const assetUploadConfirmBtn = document.getElementById('assetUploadConfirmBtn');
+
+		// Helper: escape HTML to prevent XSS
+		function escapeHtml(text) {
+			const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+			return text.replace(/[&<>"']/g, m => map[m]);
+		}
+
+		// Show/hide upload dialog
+		uploadAssetBtn.addEventListener('click', () => {
+			assetUploadDialog.classList.add('show');
+			assetsToUpload = [];
+			assetUploadList.innerHTML = '';
+		});
+
+		// Drop zone
+		assetDropZone.addEventListener('click', () => {
+			assetFileInput.click();
+		});
+
+		assetDropZone.addEventListener('dragover', (e) => {
+			e.preventDefault();
+			assetDropZone.style.borderColor = 'var(--accent)';
+			assetDropZone.style.background = 'rgba(6,182,212,0.05)';
+		});
+
+		assetDropZone.addEventListener('dragleave', () => {
+			assetDropZone.style.borderColor = 'rgba(255,255,255,0.2)';
+			assetDropZone.style.background = '';
+		});
+
+		assetDropZone.addEventListener('drop', (e) => {
+			e.preventDefault();
+			assetDropZone.style.borderColor = 'rgba(255,255,255,0.2)';
+			assetDropZone.style.background = '';
+			handleAssetFiles(e.dataTransfer.files);
+		});
+
+		assetFileInput.addEventListener('change', (e) => {
+			handleAssetFiles(e.target.files);
+		});
+
+		// Handle asset file selection
+		function handleAssetFiles(files) {
+			assetsToUpload = [];
+			for(let file of files) {
+				if(file.name.endsWith('.json')) {
+					const reader = new FileReader();
+					reader.onload = (e) => {
+						try {
+							const json = JSON.parse(e.target.result);
+							assetsToUpload.push({name: json.name, type: json.assetType, code: json.code || json.raw});
+							updateAssetUploadList();
+						} catch(err) {
+							alert('Invalid JSON in ' + file.name);
+						}
+					};
+					reader.readAsText(file);
+				}
+			}
+		}
+
+		function updateAssetUploadList() {
+			assetUploadList.innerHTML = assetsToUpload.map((a, i) => 
+				`<div style="padding:8px;background:rgba(255,255,255,0.02);border-radius:4px;margin-bottom:4px;display:flex;justify-content:space-between">
+					<div><strong style="color:#e6eef8">${escapeHtml(a.name)}</strong><br><small style="color:var(--muted)">${escapeHtml(a.type)}</small></div>
+					<button style="padding:4px 8px;background:rgba(255,0,0,0.2);border:1px solid rgba(255,0,0,0.3);border-radius:4px;color:#ff6b6b;cursor:pointer;font-size:11px" onclick="assetsToUpload.splice(${i},1);updateAssetUploadList()">Remove</button>
+				</div>`
+			).join('');
+		}
+
+		// New asset buttons
+		document.getElementById('assetNewObjectBtn').addEventListener('click', () => createNewAsset('object'));
+		document.getElementById('assetNewInventoryBtn').addEventListener('click', () => createNewAsset('inventory'));
+		document.getElementById('assetNewToolBtn').addEventListener('click', () => createNewAsset('tool'));
+
+		function createNewAsset(type) {
+			const name = prompt(`Enter ${type} name:`);
+			if(!name) return;
+			const defaultCode = type === 'object' 
+				? `class ${name}World extends WorldObject {
+\tconstructor(data) { super(data); }
+\tstatic spawn(x,y,z,world=0) {
+\t\treturn new ${name}World({id:Math.random(),name:'${name}',x,y,z,triangles:[],tetrahedrons:[],actions:[]});
+\t}
+}
+// == ASSETMANAGER/WORLDCORRESP ==`
+				: type === 'inventory'
+				? `class ${name}Item extends InventoryItem {
+\tconstructor(qty=1, worldClass=null) {
+\t\tsuper('${name.toLowerCase()}','${name}', qty, worldClass);
+\t}
+}
+// == ASSETMANAGER/WORLDCORRESP ==
+class ${name}World extends WorldObject {
+\tconstructor(data) { super(data); }
+\tstatic spawn(x,y,z,world=0) {
+\t\treturn new ${name}World({id:Math.random(),name:'${name}',x,y,z,triangles:[],tetrahedrons:[],actions:[]});
+\t}
+}`
+				: `class ${name}Tool extends ToolItem {
+\tconstructor(qty=1, worldClass=null) {
+\t\tsuper('${name.toLowerCase()}','${name}', qty, worldClass);
+\t}
+}
+// == ASSETMANAGER/WORLDCORRESP ==
+class ${name}World extends WorldObject {
+\tconstructor(data) { super(data); }
+\tstatic spawn(x,y,z,world=0) {
+\t\treturn new ${name}World({id:Math.random(),name:'${name}',x,y,z,triangles:[],tetrahedrons:[],actions:[]});
+\t}
+}`;
+			assetsToUpload.push({name: name, type: type, code: defaultCode});
+			updateAssetUploadList();
+		}
+
+		// Confirm upload
+		assetUploadConfirmBtn.addEventListener('click', () => {
+			if(assetsToUpload.length === 0) {
+				alert('No assets to import');
+				return;
+			}
+			for(const asset of assetsToUpload) {
+				const assetFolder = FileList[0].children.find(c => c.name === 'assets');
+				if(!assetFolder) continue;
+				const typeFolder = assetFolder.children.find(c => c.name === asset.type);
+				if(typeFolder) {
+					typeFolder.children = typeFolder.children.filter(c => c.name !== asset.name);
+				}
+				const newAssetFile = {name: asset.name, type: 'json', content: JSON.stringify({name: asset.name, assetType: asset.type, code: asset.code}, null, 2)};
+				if(typeFolder) {
+					typeFolder.children.push(newAssetFile);
+				} else {
+					assetFolder.children.push({name: asset.type, type: 'folder', children: [newAssetFile]});
+				}
+				// Add to grid
 				const div = document.createElement('div');
 				div.className = 'asset-item';
-				div.setAttribute('data-asset', name);
-				div.innerHTML = '<div class="asset-thumb"></div><div style="font-size:12px">'+name+'</div>';
-				div.setAttribute('data-type', 'images');
+				div.setAttribute('data-asset', asset.name);
+				div.setAttribute('data-assetid', asset.name);
+				div.setAttribute('data-type', asset.type);
+				div.innerHTML = '<div class="asset-thumb"></div><div style="font-size:12px">'+escapeHtml(asset.name)+'</div>';
 				assetsGrid.prepend(div);
-				filterAssets();
+			}
+			assetUploadDialog.classList.remove('show');
+			saveProjectToStorage();
+			filterAssets();
+		});
+
+		// New asset button
+		document.getElementById('newAssetBtn').addEventListener('click', () => {
+			assetUploadDialog.classList.add('show');
+			assetsToUpload = [];
+			assetUploadList.innerHTML = '';
+		});
+
+		// Asset selection handling
+		assetsGrid.addEventListener('click', (e) => {
+			const assetItem = e.target.closest('.asset-item');
+			if(!assetItem) return;
+			document.querySelectorAll('#assetsGrid .asset-item').forEach(it => it.classList.remove('selected'));
+			assetItem.classList.add('selected');
+			selectedAssetId = assetItem.dataset.assetid || assetItem.dataset.asset;
+			const assetName = assetItem.dataset.asset || assetItem.textContent.trim();
+			assetsPreviewContent.textContent = 'Asset: ' + escapeHtml(assetName);
+			assetsOpenBtn.disabled = false;
+			document.getElementById('assetsDownloadBtn').disabled = false;
+		});
+
+		// Open asset in editor
+		document.getElementById('assetsOpenBtn').addEventListener('click', () => {
+			if(!selectedAssetId) return;
+			const assetItem = assetsGrid.querySelector(`[data-assetid="${escapeHtml(selectedAssetId)}"]`);
+			if(!assetItem) return;
+			const assetType = assetItem.dataset.type;
+			const assets = FileList[0].children.find(c => c.name === 'assets');
+			const typeFolder = assets && assets.children.find(c => c.name === assetType);
+			const assetFile = typeFolder && typeFolder.children.find(c => c.name === selectedAssetId);
+			if(assetFile && assetFile.content) {
+				try {
+					const assetJson = JSON.parse(assetFile.content);
+					const codeEditor = document.getElementById('codeEditorTextarea');
+					const codeHeader = document.getElementById('codeEditorHeader');
+					codeEditor.value = assetJson.code || '';
+					codeHeader.textContent = 'Editing: ' + escapeHtml(assetJson.name) + ' (Asset)';
+					codeEditor.dataset.editingAsset = selectedAssetId;
+					codeEditor.dataset.editingAssetType = assetType;
+					document.querySelectorAll('.tab').forEach(t => {
+						if(t.dataset.tab === 'code') {
+							t.click();
+						}
+					});
+				} catch(err) {
+					console.error('Failed to parse asset:', err);
+				}
+			}
+		});
+
+		// Download asset JSON
+		document.getElementById('assetsDownloadBtn').addEventListener('click', () => {
+			if(!selectedAssetId) return;
+			const assetItem = assetsGrid.querySelector(`[data-assetid="${escapeHtml(selectedAssetId)}"]`);
+			if(!assetItem) return;
+			const assetType = assetItem.dataset.type;
+			const assets = FileList[0].children.find(c => c.name === 'assets');
+			const typeFolder = assets && assets.children.find(c => c.name === assetType);
+			const assetFile = typeFolder && typeFolder.children.find(c => c.name === selectedAssetId);
+			if(assetFile && assetFile.content) {
+				try {
+					const assetJson = JSON.parse(assetFile.content);
+					const dataStr = JSON.stringify(assetJson, null, 2);
+					const dataBlob = new Blob([dataStr], {type: 'application/json'});
+					const url = URL.createObjectURL(dataBlob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = selectedAssetId + '.json';
+					a.click();
+					URL.revokeObjectURL(url);
+				} catch(err) {
+					console.error('Failed to download asset:', err);
+				}
+			}
 			});
 
 // Search & type filtering
@@ -1302,6 +1549,24 @@ function loopUser(){
 					}
 					saveProjectToStorage();
 				}
+				// Auto-save edited assets
+				if(codeEditorTextarea.dataset.editingAsset) {
+					const assetId = codeEditorTextarea.dataset.editingAsset;
+					const assetType = codeEditorTextarea.dataset.editingAssetType;
+					const assets = FileList[0].children.find(c => c.name === 'assets');
+					const typeFolder = assets && assets.children.find(c => c.name === assetType);
+					const assetFile = typeFolder && typeFolder.children.find(c => c.name === assetId);
+					if(assetFile) {
+						try {
+							const assetJson = JSON.parse(assetFile.content);
+							assetJson.code = codeEditorTextarea.value;
+							assetFile.content = JSON.stringify(assetJson, null, 2);
+							saveProjectToStorage();
+						} catch(err) {
+							console.error('Failed to save asset:', err);
+						}
+					}
+				}
 			});
 
 			// Initial render
@@ -1331,6 +1596,8 @@ function loopUser(){
 					currentEditingFile = file;
 					codeEditorHeader.textContent = file.name;
 					codeEditorTextarea.value = file.content || '';
+					codeEditorTextarea.dataset.editingAsset = '';
+					codeEditorTextarea.dataset.editingAssetType = '';
 				}
 			};
 		})();
@@ -1416,7 +1683,25 @@ ${assets}
 		}
 
 		function PrepareAssets(){
-			
+			const assets = FileList[0].children.find(c => c.name === 'assets');
+			if(!assets || !assets.children) return '';
+			const assetCode = [];
+			for(const typeFolder of assets.children) {
+				if(typeFolder.type !== 'folder' || !typeFolder.children) continue;
+				for(const assetFile of typeFolder.children) {
+					if(assetFile.type === 'json' && assetFile.content) {
+						try {
+							const assetJson = JSON.parse(assetFile.content);
+							if(assetJson.code) {
+								assetCode.push(assetJson.code);
+							}
+						} catch(err) {
+							console.warn('Failed to parse asset:', assetFile.name, err);
+						}
+					}
+				}
+			}
+			return assetCode.join('\n\n// == COMPILER/ASSETSEPARATOR ==\n\n');
 		}
 
 		// Prepare the player.html code
