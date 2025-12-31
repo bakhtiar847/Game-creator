@@ -73,6 +73,27 @@
 		.files-main{flex:1;background:rgba(255,255,255,0.01);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.02);overflow-y:auto}
 		.files-preview{flex:0 0 250px;background:rgba(255,255,255,0.01);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.02);display:flex;flex-direction:column}
 
+		/* Assets panel layout: filters (left), library (center), preview (right) */
+		.assets-container{display:flex;gap:12px;height:calc(100vh - 240px);margin-top:8px}
+		.assets-filters{flex:0 0 220px;background:rgba(255,255,255,0.01);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.02);overflow:auto;display:flex;flex-direction:column;position:relative;transition:width .15s ease}
+		.assets-filters.collapsed{width:40px;min-width:40px;padding-left:6px;padding-right:6px;overflow:hidden}
+		.filters-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+		.filters-toggle{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);padding:6px;border-radius:6px;cursor:pointer;color:var(--muted);font-weight:700}
+		.filters-search{width:100%;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);border-radius:6px;color:#e6eef8;margin-bottom:8px}
+
+		.assets-library{flex:1;min-width:220px;background:rgba(255,255,255,0.01);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.02);overflow:auto;display:flex;flex-direction:column}
+		.assets-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+		.asset-item{background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.02)}
+		.asset-thumb{width:100%;height:80px;background:rgba(0,0,0,0.2);border-radius:6px}
+
+		.assets-preview{flex:0 0 300px;background:rgba(255,255,255,0.01);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.02);overflow:auto;display:flex;flex-direction:column}
+		.assets-preview .preview-header{margin-bottom:12px}
+
+		/* Resizer */
+		.resizer{width:8px;cursor:col-resize;background:transparent;display:flex;align-items:center;justify-content:center;position:relative}
+		.resizer:after{content:'';width:2px;height:40%;background:rgba(255,255,255,0.03);border-radius:2px}
+		.resizer.dragging:after{background:var(--accent)}
+
 		/* Folder tree */
 		.folder-tree{list-style:none;padding:0;margin:0}
 		.folder-tree-nested{list-style:none;padding-left:20px;margin:4px 0 0 0;display:none}
@@ -204,8 +225,61 @@
 
 	<main>
 		<section class="panel" id="panelAssets" data-panel>
-			<h3>Assets</h3>
-			<p class="muted">Place your assets here.</p>
+			<div style="display:flex;justify-content:space-between;align-items:center">
+				<h3>Assets</h3>
+				<p class="muted" style="margin:0">Manage your project's assets</p>
+			</div>
+
+			<div class="assets-container" id="assetsContainer">
+				<!-- Left: Filters (collapsible) -->
+				<div class="assets-filters" id="assetsFilters">
+					<div class="filters-header">
+						<span style="font-weight:700;color:#f8fdff">Filters</span>
+						<button id="filtersToggle" class="filters-toggle" title="Collapse filters" aria-pressed="false">❮</button>
+					</div>
+					<input id="assetSearch" class="filters-search" placeholder="Search assets..." />
+					<div style="font-size:13px;color:var(--muted);margin-top:6px">
+						<label><input type="checkbox" data-type="image" checked /> Images</label><br />
+						<label><input type="checkbox" data-type="audio" checked /> Audio</label><br />
+						<label><input type="checkbox" data-type="sprite" checked /> Sprites</label>
+					</div>
+				</div>
+
+				<!-- Resizer between filters and library -->
+				<div class="resizer" id="resizerLeft" title="Resize filters" role="separator" aria-orientation="vertical" tabindex="0"></div>
+
+				<!-- Center: Library -->
+				<div class="assets-library" id="assetsLibrary">
+					<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+						<div style="font-weight:600;color:#f8fdff;font-size:13px">Library</div>
+						<button class="open-btn" id="uploadAssetBtn">Upload</button>
+					</div>
+					<div class="assets-grid" id="assetsGrid">
+						<div class="asset-item" data-asset="sample1">
+							<div class="asset-thumb"></div>
+							<div style="font-size:12px">Sample Image</div>
+						</div>
+						<div class="asset-item" data-asset="sample2">
+							<div class="asset-thumb"></div>
+							<div style="font-size:12px">Background</div>
+						</div>
+						<div class="asset-item" data-asset="sample3">
+							<div class="asset-thumb"></div>
+							<div style="font-size:12px">Music</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Resizer between library and preview -->
+				<div class="resizer" id="resizerRight" title="Resize preview" role="separator" aria-orientation="vertical" tabindex="0"></div>
+
+				<!-- Right: Preview -->
+				<div class="assets-preview" id="assetsPreview">
+					<div class="preview-header">Preview</div>
+					<div class="preview-content" id="assetsPreviewContent">Select an asset to preview</div>
+					<button class="open-btn" id="assetsOpenBtn" disabled>Open</button>
+				</div>
+			</div>
 		</section>
 		<section class="panel" id="panelWorld" data-panel style="display:none;margin-top:16px">
 			<h3>World</h3>
@@ -826,6 +900,138 @@ function loopUser(){
 
 		// Ensure project panel is populated on load
 		updateProjectPanel();
+
+		/* Assets panel interactivity: collapse filters and resize side panels */
+		(function(){
+			const filtersEl = document.getElementById('assetsFilters');
+			const resizerLeft = document.getElementById('resizerLeft');
+			const resizerRight = document.getElementById('resizerRight');
+			const previewEl = document.getElementById('assetsPreview');
+			const libraryEl = document.getElementById('assetsLibrary');
+			const filtersToggle = document.getElementById('filtersToggle');
+			const assetSearch = document.getElementById('assetSearch');
+			const assetsGrid = document.getElementById('assetsGrid');
+			const assetsPreviewContent = document.getElementById('assetsPreviewContent');
+			const assetsOpenBtn = document.getElementById('assetsOpenBtn');
+			const uploadAssetBtn = document.getElementById('uploadAssetBtn');
+
+			if(!filtersEl) return;
+
+			// Collapse/expand filters
+			filtersToggle.addEventListener('click', () => {
+				const collapsed = filtersEl.classList.toggle('collapsed');
+				filtersToggle.setAttribute('aria-pressed', String(collapsed));
+				filtersToggle.textContent = collapsed ? '❯' : '❮';
+				if(!collapsed){
+					const saved = filtersEl.dataset.savedWidth;
+					if(saved) filtersEl.style.flex = '0 0 ' + saved + 'px';
+				} else {
+					filtersEl.dataset.savedWidth = filtersEl.getBoundingClientRect().width;
+					filtersEl.style.flex = '0 0 40px';
+				}
+			});
+
+			// Generic resize helper
+			function initResize(resizer, onMove){
+				let dragging = false;
+				let startX = 0;
+				function onDown(e){
+					dragging = true;
+					startX = e.clientX || (e.touches && e.touches[0].clientX);
+					resizer.classList.add('dragging');
+					document.addEventListener('mousemove', onMoveInternal);
+					document.addEventListener('mouseup', onUp);
+					document.addEventListener('touchmove', onMoveInternal, {passive:false});
+					document.addEventListener('touchend', onUp);
+					document.body.style.userSelect = 'none';
+				}
+				function onMoveInternal(e){
+					if(!dragging) return;
+					const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+					const dx = clientX - startX;
+					onMove(dx);
+				}
+				function onUp(){
+					dragging = false;
+					resizer.classList.remove('dragging');
+					document.removeEventListener('mousemove', onMoveInternal);
+					document.removeEventListener('mouseup', onUp);
+					document.removeEventListener('touchmove', onMoveInternal);
+					document.removeEventListener('touchend', onUp);
+					document.body.style.userSelect = '';
+				}
+				resizer.addEventListener('mousedown', onDown);
+				resizer.addEventListener('touchstart', onDown, {passive:true});
+			}
+
+			// Left resizer: adjust filters width
+			initResize(resizerLeft, (dx) => {
+				const startWidth = parseFloat(filtersEl.style.flexBasis || filtersEl.getBoundingClientRect().width);
+				let newWidth = startWidth + dx;
+				newWidth = Math.max(40, Math.min(480, newWidth));
+				filtersEl.style.flex = '0 0 ' + newWidth + 'px';
+			});
+
+			// Right resizer: adjust preview width
+			initResize(resizerRight, (dx) => {
+				const startWidth = parseFloat(previewEl.style.flexBasis || previewEl.getBoundingClientRect().width);
+				let newWidth = startWidth - dx;
+				newWidth = Math.max(160, Math.min(700, newWidth));
+				previewEl.style.flex = '0 0 ' + newWidth + 'px';
+			});
+
+			// Asset selection handling
+			assetsGrid.addEventListener('click', (e) => {
+				const assetItem = e.target.closest('.asset-item');
+				if(!assetItem) return;
+				document.querySelectorAll('#assetsGrid .asset-item').forEach(it => it.classList.remove('selected'));
+				assetItem.classList.add('selected');
+				assetsPreviewContent.textContent = 'Previewing: ' + (assetItem.dataset.asset || assetItem.textContent.trim());
+				assetsOpenBtn.disabled = false;
+			});
+
+			// Simple upload - add placeholder asset
+			uploadAssetBtn.addEventListener('click', () => {
+				const name = prompt('Asset name');
+				if(!name) return;
+				const div = document.createElement('div');
+				div.className = 'asset-item';
+				div.setAttribute('data-asset', name);
+				div.innerHTML = '<div class="asset-thumb"></div><div style="font-size:12px">'+name+'</div>';
+				assetsGrid.prepend(div);
+			});
+
+			// Search filtering
+			function filterAssets(){
+				const q = assetSearch.value.trim().toLowerCase();
+				document.querySelectorAll('#assetsGrid .asset-item').forEach(it => {
+					const label = it.textContent.toLowerCase();
+					it.style.display = q && !label.includes(q) ? 'none' : '';
+				});
+			}
+			assetSearch.addEventListener('input', filterAssets);
+
+			// Keyboard support for resizers
+			[resizerLeft, resizerRight].forEach(r => {
+				if(!r) return;
+				r.addEventListener('keydown', (e) => {
+					if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
+						e.preventDefault();
+						const step = (e.shiftKey ? 20 : 8) * (e.key === 'ArrowLeft' ? -1 : 1);
+						if(r === resizerLeft){
+							const cur = parseFloat(filtersEl.style.flexBasis || filtersEl.getBoundingClientRect().width);
+							const nw = Math.max(40, Math.min(480, cur + step));
+							filtersEl.style.flex = '0 0 ' + nw + 'px';
+						} else {
+							const cur = parseFloat(previewEl.style.flexBasis || previewEl.getBoundingClientRect().width);
+							const nw = Math.max(160, Math.min(700, cur + step));
+							previewEl.style.flex = '0 0 ' + nw + 'px';
+						}
+					}
+				});
+			});
+
+		})();
 
 		// Code panel functionality
 		(function(){
