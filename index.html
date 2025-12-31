@@ -239,9 +239,10 @@
 					</div>
 					<input id="assetSearch" class="filters-search" placeholder="Search assets..." />
 					<div style="font-size:13px;color:var(--muted);margin-top:6px">
-						<label><input type="checkbox" data-type="image" checked /> Images</label><br />
-						<label><input type="checkbox" data-type="audio" checked /> Audio</label><br />
-						<label><input type="checkbox" data-type="sprite" checked /> Sprites</label>
+						<label><input type="checkbox" data-type="images" checked /> Images</label><br />
+						<label><input type="checkbox" data-type="objects" checked /> Objects</label><br />
+						<label><input type="checkbox" data-type="inventory" checked /> Inventory Items</label><br />
+					<label><input type="checkbox" data-type="tools" checked /> Tools</label>
 					</div>
 				</div>
 
@@ -255,17 +256,17 @@
 						<button class="open-btn" id="uploadAssetBtn">Upload</button>
 					</div>
 					<div class="assets-grid" id="assetsGrid">
-						<div class="asset-item" data-asset="sample1">
+						<div class="asset-item" data-asset="sample1" data-type="images">
 							<div class="asset-thumb"></div>
 							<div style="font-size:12px">Sample Image</div>
 						</div>
-						<div class="asset-item" data-asset="sample2">
+						<div class="asset-item" data-asset="sample2" data-type="objects">
 							<div class="asset-thumb"></div>
-							<div style="font-size:12px">Background</div>
+							<div style="font-size:12px">Game Object</div>
 						</div>
-						<div class="asset-item" data-asset="sample3">
+						<div class="asset-item" data-asset="sample3" data-type="tools">
 							<div class="asset-thumb"></div>
-							<div style="font-size:12px">Music</div>
+							<div style="font-size:12px">Sample Tool</div>
 						</div>
 					</div>
 				</div>
@@ -998,18 +999,25 @@ function loopUser(){
 				div.className = 'asset-item';
 				div.setAttribute('data-asset', name);
 				div.innerHTML = '<div class="asset-thumb"></div><div style="font-size:12px">'+name+'</div>';
+				div.setAttribute('data-type', 'images');
 				assetsGrid.prepend(div);
+				filterAssets();
 			});
 
-			// Search filtering
-			function filterAssets(){
-				const q = assetSearch.value.trim().toLowerCase();
-				document.querySelectorAll('#assetsGrid .asset-item').forEach(it => {
-					const label = it.textContent.toLowerCase();
-					it.style.display = q && !label.includes(q) ? 'none' : '';
-				});
-			}
-			assetSearch.addEventListener('input', filterAssets);
+// Search & type filtering
+				function filterAssets(){
+					const q = assetSearch.value.trim().toLowerCase();
+					const checkedTypes = Array.from(document.querySelectorAll('#assetsFilters input[type="checkbox"]:checked')).map(cb => cb.getAttribute('data-type'));
+					document.querySelectorAll('#assetsGrid .asset-item').forEach(it => {
+						const label = it.textContent.toLowerCase();
+						const t = it.getAttribute('data-type') || 'images';
+						const matchesQuery = !q || label.includes(q);
+						const matchesType = checkedTypes.length === 0 || checkedTypes.includes(t);
+						it.style.display = (matchesQuery && matchesType) ? '' : 'none';
+					});
+				}
+				assetSearch.addEventListener('input', filterAssets);
+				document.querySelectorAll('#assetsFilters input[type="checkbox"]').forEach(cb => cb.addEventListener('change', filterAssets));
 
 			// Keyboard support for resizers
 			[resizerLeft, resizerRight].forEach(r => {
