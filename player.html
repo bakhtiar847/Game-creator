@@ -803,36 +803,129 @@
 
 			static spawn(x,y,z,world=0, opts={}){
 				const id = Date.now()+Math.floor(Math.random()*1000);
-				const car = new Car(Object.assign({ id, name: opts.name || 'Car', x, y, z, color: opts.color || '#2b6f9b', world, isworld:true, iswall:false }, opts));
-				const hx = (opts.hx || 30), hy = (opts.hy || 12), hz = (opts.hz || 18);
+				const car = new Car(Object.assign({ id, name: opts.name || 'Car', x, y, z, color: opts.color || '#1e40af', world, isworld:true, iswall:false }, opts));
+				const carColor = opts.color || '#1e40af';
+				const hx = (opts.hx || 30), hy = (opts.hy || 15), hz = (opts.hz || 18);
 				car._dims = {hx,hy,hz};
-				// approximate box with a few tetrahedrons
-				const a = {x:x-hx,y:y,z:z-hz}, b={x:x+hx,y:y,z:z-hz}, c={x:x-hx,y:y,z:z+hz}, d={x:x+hx,y:y,z:z+hz};
-				const e={x:x-hx,y:y+2*hy,z:z-hz}, f={x:x+hx,y:y+2*hy,z:z-hz}, g={x:x-hx,y:y+2*hy,z:z+hz}, h={x:x+hx,y:y+2*hy,z:z+hz};
-				car.tetrahedrons = [ {a:a,b:b,c:c,d:e}, {a:b,b:d,c:h,d:f}, {a:b,b:f,c:e,d:h}, {a:c,b:e,c:g,d:h}, {a:b,b:c,c:e,d:h} ];
-				// also create simple surface triangles for nicer flat-shaded rendering
+				
+				// Main body with better proportions — elongated for a car look
+				const baseY = y;
 				const verts = [
-					{ x: x-hx, y: y, z: z-hz }, //0 a
-					{ x: x+hx, y: y, z: z-hz }, //1 b
-					{ x: x-hx, y: y, z: z+hz }, //2 c
-					{ x: x+hx, y: y, z: z+hz }, //3 d
-					{ x: x-hx, y: y+2*hy, z: z-hz }, //4 e
-					{ x: x+hx, y: y+2*hy, z: z-hz }, //5 f
-					{ x: x-hx, y: y+2*hy, z: z+hz }, //6 g
-					{ x: x+hx, y: y+2*hy, z: z+hz }  //7 h
+					// Bottom front axle
+					{ x: x-hx*0.9, y: baseY, z: z-hz }, //0 BFL
+					{ x: x+hx*0.9, y: baseY, z: z-hz }, //1 BFR
+					// Bottom rear axle
+					{ x: x-hx*0.9, y: baseY, z: z+hz }, //2 BRL
+					{ x: x+hx*0.9, y: baseY, z: z+hz }, //3 BRR
+					// Main body sides (middle section)
+					{ x: x-hx, y: baseY+hy*0.3, z: z-hz*0.7 }, //4 BML (front left)
+					{ x: x+hx, y: baseY+hy*0.3, z: z-hz*0.7 }, //5 BMR (front right)
+					{ x: x-hx, y: baseY+hy*0.3, z: z+hz*0.7 }, //6 BRL (rear left)
+					{ x: x+hx, y: baseY+hy*0.3, z: z+hz*0.7 }, //7 BRR (rear right)
+					// Cabin top (narrower, elevated)
+					{ x: x-hx*0.6, y: baseY+hy, z: z-hz*0.5 }, //8 CTF (cabin top front left)
+					{ x: x+hx*0.6, y: baseY+hy, z: z-hz*0.5 }, //9 CTF (cabin top front right)
+					{ x: x-hx*0.5, y: baseY+hy, z: z+hz*0.4 }, //10 CTR (cabin top rear left)
+					{ x: x+hx*0.5, y: baseY+hy, z: z+hz*0.4 }, //11 CTR (cabin top rear right)
+					// Roof edge (rounded look)
+					{ x: x-hx*0.65, y: baseY+hy*1.3, z: z-hz*0.3 }, //12 RF (roof front left)
+					{ x: x+hx*0.65, y: baseY+hy*1.3, z: z-hz*0.3 }, //13 RF (roof front right)
+					{ x: x-hx*0.55, y: baseY+hy*1.25, z: z+hz*0.35 }, //14 RR (roof rear left)
+					{ x: x+hx*0.55, y: baseY+hy*1.25, z: z+hz*0.35 }  //15 RR (roof rear right)
 				];
-				car._baseTris = [
-					// bottom
-					[ verts[0], verts[1], verts[2] ], [ verts[1], verts[3], verts[2] ],
-					// top
-					[ verts[4], verts[6], verts[5] ], [ verts[5], verts[6], verts[7] ],
-					// front/back
-					[ verts[2], verts[3], verts[6] ], [ verts[3], verts[7], verts[6] ],
-					[ verts[0], verts[4], verts[1] ], [ verts[1], verts[4], verts[5] ],
-					// left/right
-					[ verts[0], verts[2], verts[4] ], [ verts[2], verts[6], verts[4] ],
-					[ verts[1], verts[5], verts[3] ], [ verts[3], verts[5], verts[7] ]
+				
+				// Build triangles for a more car-like shape
+				car._baseTris = [];
+				
+				// === MAIN BODY SIDES ===
+				// Front panel (angled)
+				car._baseTris.push([ verts[0], verts[4], verts[1] ]);
+				car._baseTris.push([ verts[1], verts[4], verts[5] ]);
+				// Rear panel (angled)
+				car._baseTris.push([ verts[2], verts[3], verts[6] ]);
+				car._baseTris.push([ verts[3], verts[7], verts[6] ]);
+				// Left side body
+				car._baseTris.push([ verts[0], verts[2], verts[4] ]);
+				car._baseTris.push([ verts[2], verts[6], verts[4] ]);
+				// Right side body
+				car._baseTris.push([ verts[1], verts[5], verts[3] ]);
+				car._baseTris.push([ verts[3], verts[5], verts[7] ]);
+				// Bottom (floor pan)
+				car._baseTris.push([ verts[0], verts[1], verts[2] ]);
+				car._baseTris.push([ verts[1], verts[3], verts[2] ]);
+				
+				// === CABIN SECTION ===
+				// Front windshield
+				car._baseTris.push([ verts[4], verts[8], verts[5] ]);
+				car._baseTris.push([ verts[5], verts[8], verts[9] ]);
+				// Cabin front top
+				car._baseTris.push([ verts[8], verts[12], verts[9] ]);
+				car._baseTris.push([ verts[9], verts[12], verts[13] ]);
+				// Cabin sides (left)
+				car._baseTris.push([ verts[4], verts[8], verts[10] ]);
+				car._baseTris.push([ verts[4], verts[10], verts[6] ]);
+				// Cabin sides (right)
+				car._baseTris.push([ verts[5], verts[11], verts[9] ]);
+				car._baseTris.push([ verts[7], verts[11], verts[5] ]);
+				// Cabin bottom
+				car._baseTris.push([ verts[4], verts[6], verts[8] ]);
+				car._baseTris.push([ verts[6], verts[10], verts[8] ]);
+				car._baseTris.push([ verts[5], verts[9], verts[7] ]);
+				car._baseTris.push([ verts[7], verts[9], verts[11] ]);
+				
+				// === ROOF ===
+				car._baseTris.push([ verts[8], verts[12], verts[10] ]);
+				car._baseTris.push([ verts[10], verts[12], verts[14] ]);
+				car._baseTris.push([ verts[9], verts[11], verts[13] ]);
+				car._baseTris.push([ verts[11], verts[15], verts[13] ]);
+				car._baseTris.push([ verts[12], verts[13], verts[14] ]);
+				car._baseTris.push([ verts[13], verts[15], verts[14] ]);
+				
+				// === WINDOWS (light blue added as separate visual element) ===
+				const windowColor = '#87ceeb'; // Light blue for windows
+				// Store window triangles separately to render differently
+				car._windowTris = [
+					[ verts[4], verts[8], verts[5] ], // front window
+					[ verts[5], verts[8], verts[9] ],
+					[ verts[4], verts[6], verts[10] ], // side windows
+					[ verts[5], verts[7], verts[11] ]
 				];
+				
+				// === WHEELS ===
+				const wheelRadius = 8;
+				const wheelY = baseY + 2;
+				// Front wheels
+				const wheelFL = { x: x-hx*0.75, y: wheelY, z: z-hz };
+				const wheelFR = { x: x+hx*0.75, y: wheelY, z: z-hz };
+				// Rear wheels
+				const wheelRL = { x: x-hx*0.75, y: wheelY, z: z+hz };
+				const wheelRR = { x: x+hx*0.75, y: wheelY, z: z+hz };
+				car._wheelPositions = [wheelFL, wheelFR, wheelRL, wheelRR];
+				car._wheelRadius = wheelRadius;
+				
+				// === HEADLIGHTS (bright yellow) ===
+				const headlightL = { x: x-hx*0.8, y: baseY+hy*0.2, z: z-hz-2 };
+				const headlightR = { x: x+hx*0.8, y: baseY+hy*0.2, z: z-hz-2 };
+				const hlSize = 4;
+				car._headlights = [
+					[ {x:headlightL.x-hlSize,y:headlightL.y,z:headlightL.z}, {x:headlightL.x+hlSize,y:headlightL.y,z:headlightL.z}, {x:headlightL.x,y:headlightL.y+hlSize,z:headlightL.z} ],
+					[ {x:headlightR.x-hlSize,y:headlightR.y,z:headlightR.z}, {x:headlightR.x,y:headlightR.y+hlSize,z:headlightR.z}, {x:headlightR.x+hlSize,y:headlightR.y,z:headlightR.z} ]
+				];
+				
+				// === TAILLIGHTS (bright red at rear) ===
+				const taillightL = { x: x-hx*0.8, y: baseY+hy*0.2, z: z+hz+2 };
+				const taillightR = { x: x+hx*0.8, y: baseY+hy*0.2, z: z+hz+2 };
+				const tlSize = 4;
+				car._taillights = [
+					[ {x:taillightL.x-tlSize,y:taillightL.y,z:taillightL.z}, {x:taillightL.x+tlSize,y:taillightL.y,z:taillightL.z}, {x:taillightL.x,y:taillightL.y+tlSize,z:taillightL.z} ],
+					[ {x:taillightR.x-tlSize,y:taillightR.y,z:taillightR.z}, {x:taillightR.x,y:taillightR.y+tlSize,z:taillightR.z}, {x:taillightR.x+tlSize,y:taillightR.y,z:taillightR.z} ]
+				];
+				
+				// Create tetrahedrons for collision (simplified 2-3 boxes)
+				const a = {x:x-hx,y:baseY,z:z-hz}, b={x:x+hx,y:baseY,z:z-hz}, c={x:x-hx,y:baseY,z:z+hz}, d={x:x+hx,y:baseY,z:z+hz};
+				const e={x:x-hx,y:baseY+hy,z:z-hz}, f={x:x+hx,y:baseY+hy,z:z-hz}, g={x:x-hx,y:baseY+hy,z:z+hz}, h={x:x+hx,y:baseY+hy,z:z+hz};
+				car.tetrahedrons = [ {a:a,b:b,c:c,d:e}, {a:b,b:d,c:h,d:f}, {a:b,b:f,c:e,d:h}, {a:c,b:e,c:g,d:h}, {a:b,b:c,c:e,d:h} ];
+				
 				car.speedForward = 0; car._reverse = false;
 				objects.push(car);
 				return car;
@@ -1061,27 +1154,91 @@
 						const pb = this.projectPoint(tri[1]);
 						const pc = this.projectPoint(tri[2]);
 						if(!pa||!pb||!pc) continue;
-						renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3});
+					renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3, isWindow:false});
+				}
+				// add windows for cars
+				if(obj._windowTris){
+					for(const tri of obj._windowTris){
+						const pa = this.projectPoint(tri[0]);
+						const pb = this.projectPoint(tri[1]);
+						const pc = this.projectPoint(tri[2]);
+						if(!pa||!pb||!pc) continue;
+						renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3, isWindow:true});
 					}
 				}
-				renderList.sort((a,b)=>b.depth - a.depth);
-				for(const it of renderList){
-					const obj = it.obj; const pa = it.pa, pb = it.pb, pc = it.pc;
-					ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.lineTo(pc.x,pc.y); ctx.closePath();
-					ctx.fillStyle = hexToRgba(obj.color||'#888', 0.95);
-					ctx.fill(); ctx.strokeStyle = shadeColor(obj.color||'#444', 0.9); ctx.lineWidth=1; ctx.stroke();
+				// add headlights for cars
+				if(obj._headlights){
+					for(const tri of obj._headlights){
+						const pa = this.projectPoint(tri[0]);
+						const pb = this.projectPoint(tri[1]);
+						const pc = this.projectPoint(tri[2]);
+						if(!pa||!pb||!pc) continue;
+						renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3, isHeadlight:true});
+					}
+				}
+				// add taillights for cars
+				if(obj._taillights){
+					for(const tri of obj._taillights){
+						const pa = this.projectPoint(tri[0]);
+						const pb = this.projectPoint(tri[1]);
+						const pc = this.projectPoint(tri[2]);
+						if(!pa||!pb||!pc) continue;
+						renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3, isTaillight:true});
+					}
 				}
 			}
-
-			drawObjects(){
-				const ctx = this.ctx;
-				// Only draw objects that are in the current world and have textures; hide circular placeholders
-				const projected = this.objects.filter(o=>o.world === this.player.world).map(o=>({o,p:this.projectPoint(o)})).filter(x=>x.p && x.o.texture && x.o.texture.complete);
-				projected.sort((a,b)=>b.p.z - a.p.z);
-				for(const item of projected){
-					const o = item.o, p = item.p; const size = 56 * p.scale;
-					ctx.save(); ctx.translate(p.x,p.y);
-					const img = o.texture; const aspect = img.width / img.height || 1; const h = Math.max(8,size); const w = Math.max(8,h*aspect);
+			renderList.sort((a,b)=>b.depth - a.depth);
+			for(const it of renderList){
+				const obj = it.obj; const pa = it.pa, pb = it.pb, pc = it.pc;
+				ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.lineTo(pc.x,pc.y); ctx.closePath();
+				
+				// determine color based on component type
+				let fillColor, strokeColor;
+				if(it.isWindow){
+					fillColor = hexToRgba('#87ceeb', 0.85); // light blue windows
+					strokeColor = shadeColor('#4a90a4', 0.95);
+				} else if(it.isHeadlight){
+					fillColor = hexToRgba('#ffff99', 0.9); // bright yellow headlights
+					strokeColor = shadeColor('#ffdd00', 0.95);
+				} else if(it.isTaillight){
+					fillColor = hexToRgba('#ff4444', 0.9); // bright red taillights
+					strokeColor = shadeColor('#cc0000', 0.95);
+				} else {
+					fillColor = hexToRgba(obj.color||'#888', 0.95);
+					strokeColor = shadeColor(obj.color||'#444', 0.9);
+				}
+				
+				ctx.fillStyle = fillColor;
+				ctx.fill(); ctx.strokeStyle = strokeColor; ctx.lineWidth=1; ctx.stroke();
+			}
+			
+			// draw wheels for cars
+			for(const obj of this.objects){
+				if(obj.world !== this.player.world) continue;
+				if(!obj._wheelPositions || !obj._wheelRadius) continue;
+				
+				for(const wheelPos of obj._wheelPositions){
+					const p = this.projectPoint(wheelPos);
+					if(!p) continue;
+					
+					ctx.save();
+					ctx.fillStyle = hexToRgba('#1a1a1a', 0.95); // dark gray/black wheels
+					ctx.strokeStyle = shadeColor('#000000', 0.8);
+					ctx.lineWidth = 1.5;
+					ctx.beginPath();
+					ctx.arc(p.x, p.y, obj._wheelRadius * p.scale, 0, Math.PI * 2);
+					ctx.fill();
+					ctx.stroke();
+					
+					// add rim highlight
+					ctx.strokeStyle = '#666666';
+					ctx.lineWidth = 1;
+					ctx.beginPath();
+					ctx.arc(p.x, p.y, obj._wheelRadius * p.scale * 0.6, 0, Math.PI * 2);
+					ctx.stroke();
+					
+					ctx.restore();
+				}
 					ctx.drawImage(img, -w/2, -h/2, w, h);
 					if(selectedId === o.id){ ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.strokeRect(-w/2,-h/2,w,h); }
 					ctx.restore();
