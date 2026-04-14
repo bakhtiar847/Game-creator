@@ -986,8 +986,27 @@ function loopUser(){
 			const assetsPreviewContent = document.getElementById('assetsPreviewContent');
 			const assetsOpenBtn = document.getElementById('assetsOpenBtn');
 			const addAssetBtn = document.getElementById('addAssetBtn');
+			const assetModalDialog = document.getElementById('assetModalDialog');
 
 			if(!filtersEl) return;
+
+			// Show/hide modal with tab handling
+			addAssetBtn.addEventListener('click', () => {
+				assetModalDialog.classList.add('show');
+				// Switch to upload tab
+				document.querySelectorAll('.asset-modal-tab-content').forEach(t => t.style.display = 'none');
+				const uploadTab = document.querySelector('.asset-modal-tab-content[data-tab="upload"]');
+				if(uploadTab) uploadTab.style.display = 'block';
+				document.querySelectorAll('.asset-modal-tab').forEach(btn => {
+					btn.style.borderBottomColor = 'transparent';
+					btn.style.color = 'var(--muted)';
+				});
+				const uploadBtn = document.querySelector('.asset-modal-tab[data-tab="upload"]');
+				if(uploadBtn) {
+					uploadBtn.style.borderBottomColor = 'var(--accent)';
+					uploadBtn.style.color = '#e6eef8';
+				}
+			});
 
 			// Collapse/expand filters
 			filtersToggle.addEventListener('click', () => {
