@@ -161,6 +161,10 @@
 		.modal-btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#032024}
 		.modal-btn-primary:hover{opacity:0.9}
 		.modal-btn-secondary{background:rgba(255,255,255,0.05);color:#e6eef8;border:1px solid rgba(255,255,255,0.1)}
+		/* Asset modal tab styles */
+		.asset-modal-tab{background:transparent;border:none;padding:8px 16px;color:var(--muted);cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .15s}
+		.asset-modal-tab:hover{color:#e6eef8}
+		.asset-modal-tab.active{color:#e6eef8;border-bottom-color:var(--accent)}
 		/* Welcome modal */
 		.welcome-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:200;align-items:center;justify-content:center}
 		.welcome-overlay.show{display:flex}
@@ -254,8 +258,7 @@
 					<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
 						<div style="font-weight:600;color:#f8fdff;font-size:13px">Library</div>
 						<div style="display:flex;gap:6px">
-							<button class="open-btn" id="uploadAssetBtn" style="flex:1;padding:6px 12px;font-size:12px">Upload</button>
-							<button class="open-btn" id="newAssetBtn" style="flex:1;padding:6px 12px;font-size:12px">+ Asset</button>
+							<button class="open-btn" id="addAssetBtn" style="flex:1;padding:6px 12px;font-size:12px">+ Add Asset</button>
 						</div>
 					</div>
 					<div class="assets-grid" id="assetsGrid">
@@ -347,31 +350,63 @@
 		</section>
 	</main>
 
-	<!-- Asset Upload Dialog -->
-	<div class="modal-overlay" id="assetUploadDialog" style="display:none">
-		<div class="modal-dialog" style="min-width:400px;max-width:500px">
-			<h3>Upload Asset(s)</h3>
-			<p style="color:var(--muted);font-size:13px;margin:12px 0">Upload JSON asset files or a folder containing multiple assets.</p>
-			<div style="margin-bottom:16px">
-				<div id="assetDropZone" style="border:2px dashed rgba(255,255,255,0.2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .2s">
-					<div style="font-size:32px;margin-bottom:8px">📁</div>
-					<div style="color:#e6eef8;font-weight:600;margin-bottom:4px">Drop files here or click to browse</div>
-					<div style="font-size:12px;color:var(--muted)">JSON files or folder of JSONs</div>
-				</div>
-				<input type="file" id="assetFileInput" style="display:none" accept=".json" multiple />
-				<input type="file" id="assetFolderInput" style="display:none" webkitdirectory directory />
+	<!-- Asset Management Modal with Tabs -->
+	<div class="modal-overlay" id="assetModalDialog" style="display:none">
+		<div class="modal-dialog" style="min-width:500px;max-width:700px;height:auto;max-height:90vh;display:flex;flex-direction:column">
+			<h3 style="margin:0 0 16px 0">Add Asset</h3>
+			
+			<!-- Tab Navigation -->
+			<div style="display:flex;gap:8px;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:16px">
+				<button class="asset-modal-tab active" data-tab="upload" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid var(--accent);color:#e6eef8;cursor:pointer;font-weight:600">Upload</button>
+				<button class="asset-modal-tab" data-tab="templates" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-weight:600">Templates</button>
+				<button class="asset-modal-tab" data-tab="paste" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-weight:600">Paste Code</button>
+				<button class="asset-modal-tab" data-tab="empty" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-weight:600">Empty</button>
 			</div>
-			<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-bottom:16px">
-				<span style="font-size:13px;color:var(--muted)">Or create new:</span>
-				<div style="display:flex;gap:6px">
-					<button id="assetNewObjectBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Object</button>
-					<button id="assetNewInventoryBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Inventory Item</button>
-					<button id="assetNewToolBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Tool</button>
+			
+			<!-- Tab Content Container -->
+			<div style="flex:1;overflow-y:auto;margin-bottom:16px">
+				<!-- Upload Tab -->
+				<div class="asset-modal-tab-content active" data-tab="upload">
+					<p style="color:var(--muted);font-size:13px;margin:0 0 12px 0">Upload JSON asset files or a folder containing multiple assets.</p>
+					<div style="margin-bottom:16px">
+						<div id="assetDropZone" style="border:2px dashed rgba(255,255,255,0.2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .2s">
+							<div style="font-size:32px;margin-bottom:8px">📁</div>
+							<div style="color:#e6eef8;font-weight:600;margin-bottom:4px">Drop files here or click to browse</div>
+							<div style="font-size:12px;color:var(--muted)">JSON files or folder of JSONs</div>
+						</div>
+						<input type="file" id="assetFileInput" style="display:none" accept=".json" multiple />
+						<input type="file" id="assetFolderInput" style="display:none" webkitdirectory directory />
+					</div>
+					<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-bottom:16px">
+						<span style="font-size:13px;color:var(--muted)">Or create new:</span>
+						<div style="display:flex;gap:6px">
+							<button id="assetNewObjectBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Object</button>
+							<button id="assetNewInventoryBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Inventory Item</button>
+							<button id="assetNewToolBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Tool</button>
+						</div>
+					</div>
+					<div id="assetUploadList" style="max-height:200px;overflow-y:auto;margin-bottom:16px;background:rgba(0,0,0,0.2);border-radius:6px;padding:8px"></div>
+				</div>
+				
+				<!-- Templates Tab -->
+				<div class="asset-modal-tab-content" data-tab="templates" style="display:none">
+					<p style="color:var(--muted);font-size:13px;margin:0">Templates coming soon...</p>
+				</div>
+				
+				<!-- Paste Code Tab -->
+				<div class="asset-modal-tab-content" data-tab="paste" style="display:none">
+					<p style="color:var(--muted);font-size:13px;margin:0 0 12px 0">Paste Code coming soon...</p>
+				</div>
+				
+				<!-- Empty Tab -->
+				<div class="asset-modal-tab-content" data-tab="empty" style="display:none">
+					<p style="color:var(--muted);font-size:13px;margin:0">Empty assets coming soon...</p>
 				</div>
 			</div>
-			<div id="assetUploadList" style="max-height:200px;overflow-y:auto;margin-bottom:16px;background:rgba(0,0,0,0.2);border-radius:6px;padding:8px"></div>
+			
+			<!-- Action Buttons -->
 			<div style="display:flex;gap:8px;justify-content:flex-end">
-				<button class="modal-btn modal-btn-secondary" onclick="document.getElementById('assetUploadDialog').classList.remove('show')">Cancel</button>
+				<button class="modal-btn modal-btn-secondary" onclick="document.getElementById('assetModalDialog').classList.remove('show')">Cancel</button>
 				<button id="assetUploadConfirmBtn" class="modal-btn modal-btn-primary">Import Assets</button>
 			</div>
 		</div>
@@ -950,7 +985,7 @@ function loopUser(){
 			const assetsGrid = document.getElementById('assetsGrid');
 			const assetsPreviewContent = document.getElementById('assetsPreviewContent');
 			const assetsOpenBtn = document.getElementById('assetsOpenBtn');
-			const uploadAssetBtn = document.getElementById('uploadAssetBtn');
+			const addAssetBtn = document.getElementById('addAssetBtn');
 
 			if(!filtersEl) return;
 
@@ -1025,7 +1060,7 @@ function loopUser(){
 		const assetDropZone = document.getElementById('assetDropZone');
 		const assetFileInput = document.getElementById('assetFileInput');
 		const assetFolderInput = document.getElementById('assetFolderInput');
-		const assetUploadDialog = document.getElementById('assetUploadDialog');
+		const assetModalDialog = document.getElementById('assetModalDialog');
 		const assetUploadList = document.getElementById('assetUploadList');
 		const assetUploadConfirmBtn = document.getElementById('assetUploadConfirmBtn');
 
@@ -1035,11 +1070,49 @@ function loopUser(){
 			return text.replace(/[&<>"']/g, m => map[m]);
 		}
 
-		// Show/hide upload dialog
-		uploadAssetBtn.addEventListener('click', () => {
-			assetUploadDialog.classList.add('show');
+		// Tab switching for asset modal
+		function switchAssetModalTab(tabName) {
+			// Hide all tabs
+			document.querySelectorAll('.asset-modal-tab-content').forEach(tab => {
+				tab.style.display = 'none';
+				tab.classList.remove('active');
+			});
+			// Show selected tab
+			const selectedTab = document.querySelector(`.asset-modal-tab-content[data-tab="${tabName}"]`);
+			if(selectedTab) {
+				selectedTab.style.display = 'block';
+				selectedTab.classList.add('active');
+			}
+			// Update button states
+			document.querySelectorAll('.asset-modal-tab').forEach(btn => {
+				btn.classList.remove('active');
+				btn.style.borderBottomColor = 'transparent';
+				btn.style.color = 'var(--muted)';
+			});
+			// Highlight active button
+			const activeBtn = document.querySelector(`.asset-modal-tab[data-tab="${tabName}"]`);
+			if(activeBtn) {
+				activeBtn.classList.add('active');
+				activeBtn.style.borderBottomColor = 'var(--accent)';
+				activeBtn.style.color = '#e6eef8';
+			}
+		}
+
+		// Setup tab listeners
+		document.querySelectorAll('.asset-modal-tab').forEach(btn => {
+			btn.addEventListener('click', () => {
+				const tabName = btn.getAttribute('data-tab');
+				switchAssetModalTab(tabName);
+			});
+		});
+
+		// Show/hide modal with tab handling
+		addAssetBtn.addEventListener('click', () => {
+			assetModalDialog.classList.add('show');
 			assetsToUpload = [];
 			assetUploadList.innerHTML = '';
+			// Switch to upload tab
+			switchAssetModalTab('upload');
 		});
 
 		// Drop zone
@@ -1171,16 +1244,9 @@ class ${name}World extends WorldObject {
 				div.innerHTML = '<div class="asset-thumb"></div><div style="font-size:12px">'+escapeHtml(asset.name)+'</div>';
 				assetsGrid.prepend(div);
 			}
-			assetUploadDialog.classList.remove('show');
+			assetModalDialog.classList.remove('show');
 			saveProjectToStorage();
 			filterAssets();
-		});
-
-		// New asset button
-		document.getElementById('newAssetBtn').addEventListener('click', () => {
-			assetUploadDialog.classList.add('show');
-			assetsToUpload = [];
-			assetUploadList.innerHTML = '';
 		});
 
 		// Asset selection handling
