@@ -1351,6 +1351,24 @@ class ${name}World extends WorldObject {
 				assetSearch.addEventListener('input', filterAssets);
 				document.querySelectorAll('#assetsFilters input[type="checkbox"]').forEach(cb => cb.addEventListener('change', filterAssets));
 
+			// Tab listeners for asset modal
+			document.querySelectorAll('.asset-modal-tab').forEach(btn => {
+				btn.addEventListener('click', () => {
+					const tabName = btn.getAttribute('data-tab');
+					document.querySelectorAll('.asset-modal-tab-content').forEach(tab => {
+						tab.style.display = 'none';
+					});
+					const selectedTab = document.querySelector(`.asset-modal-tab-content[data-tab="${tabName}"]`);
+					if(selectedTab) selectedTab.style.display = 'block';
+					document.querySelectorAll('.asset-modal-tab').forEach(b => {
+						b.style.color = 'var(--muted)';
+						b.style.borderBottomColor = 'transparent';
+					});
+					btn.style.color = '#e6eef8';
+					btn.style.borderBottomColor = 'var(--accent)';
+				});
+			});
+
 			// Keyboard support for resizers
 			[resizerLeft, resizerRight].forEach(r => {
 				if(!r) return;
