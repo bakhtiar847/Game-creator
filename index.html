@@ -1029,16 +1029,11 @@ function loopUser(){
 				});
 			});
 
-			// Modal close handlers
-			const cancelBtn = document.getElementById('assetModalCancelBtn');
-			const confirmBtn = document.getElementById('assetModalConfirmBtn');
-			if(cancelBtn) {
-				cancelBtn.addEventListener('click', () => {
-					assetModalDialog.classList.remove('show');
-				});
-			}
+			// Modal close handlers for confirm button
+			const confirmBtn = document.getElementById('assetUploadConfirmBtn');
 			if(confirmBtn) {
 				confirmBtn.addEventListener('click', () => {
+					// TODO: Handle asset upload confirmation
 					assetModalDialog.classList.remove('show');
 				});
 			}
