@@ -285,14 +285,20 @@
 				addScrew(LEFT_X + railThickness - 1, h, 2.5, 0.6);
 				addScrew(RIGHT_X - railThickness + 1, h, -2.5, 0.6);
 				addScrew(RIGHT_X - railThickness + 1, h, 2.5, 0.6);
-				const id = Date.now() + Math.floor(Math.random()*1000);
-				const l = new Ladder({ id, name:'Ladder', x:x, y:y, z:z, color:'#6b4423', world, isworld:true, iswall:true });
-				
-				// Build detailed ladder mesh in local coordinates
-				const height = 80;
-				l._baseTris = Ladder.buildLadderGeometry(height);
-				
-				// collision tetrahedron
+			}
+			
+			return triangles;
+		}
+
+		static spawn(x,y,z,world=0){
+			const id = Date.now() + Math.floor(Math.random()*1000);
+			const l = new Ladder({ id, name:'Ladder', x:x, y:y, z:z, color:'#6b4423', world, isworld:true, iswall:true });
+			
+			// Build detailed ladder mesh in local coordinates
+			const height = 80;
+			l._baseTris = Ladder.buildLadderGeometry(height);
+			
+			// collision tetrahedron
 				l.tetrahedrons = [ { a:{x:x-6,y:y,z:z-6}, b:{x:x+6,y:y,z:z-6}, c:{x:x+6,y:y+height,z:z+6}, d:{x:x-6,y:y+height,z:z+6} } ];
 				
 				// Create moss and wood aged texture
