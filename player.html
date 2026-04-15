@@ -1561,16 +1561,6 @@
 						renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3, isTaillight:true});
 					}
 				}
-				// add wheels for cars
-				if(obj._wheelTris){
-					for(const tri of obj._wheelTris){
-						const pa = this.projectPoint(tri[0]);
-						const pb = this.projectPoint(tri[1]);
-						const pc = this.projectPoint(tri[2]);
-						if(!pa||!pb||!pc) continue;
-						renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3, isWheel:true});
-					}
-				}
 			}
 			renderList.sort((a,b)=>b.depth - a.depth);
 			for(const it of renderList){
