@@ -430,6 +430,24 @@
 				tri.color = color;
 				tris.push(tri);
 			}
+			
+			// Add bottom cap (fan from center point)
+			const lastLayerFraction = 1;
+			const bottomY = topHeight - (radius * lastLayerFraction * 1.5);
+			const bottomCenter = {x: localX, y: bottomY, z: 0};
+			const bottomR = radius * Math.sqrt(lastLayerFraction * (2 - lastLayerFraction));
+			
+			for(let i = 0; i < segments; i++){
+				const ni = (i + 1) % segments;
+				const angle1 = (i / segments) * Math.PI * 2;
+				const angle2 = (ni / segments) * Math.PI * 2;
+				const v1 = {x: localX + Math.cos(angle1) * bottomR, y: bottomY, z: Math.sin(angle1) * bottomR};
+				const v2 = {x: localX + Math.cos(angle2) * bottomR, y: bottomY, z: Math.sin(angle2) * bottomR};
+				
+				const tri = [bottomCenter, v1, v2];
+				tri.color = color;
+				tris.push(tri);
+			}
 		}
 
 		// create simple color texture (data URL) for small sprites/icons
