@@ -217,9 +217,7 @@
 					{x: x1, y: y1, z: z1}, {x: x2, y: y1, z: z1}, {x: x2, y: y2, z: z1}, {x: x1, y: y2, z: z1},
 					{x: x1, y: y1, z: z2}, {x: x2, y: y1, z: z2}, {x: x2, y: y2, z: z2}, {x: x1, y: y2, z: z2}
 				];
-				// Front, back, top, bottom, left, right faces
-				triangles.push([pts[0], pts[1], pts[2]]); triangles.push([pts[0], pts[2], pts[3]]);
-				triangles.push([pts[4], pts[6], pts[5]]); triangles.push([pts[4], pts[7], pts[6]]);
+				// Top, bottom, left, right faces only (no front/back faces)
 				triangles.push([pts[0], pts[4], pts[5]]); triangles.push([pts[0], pts[5], pts[1]]);
 				triangles.push([pts[2], pts[6], pts[7]]); triangles.push([pts[2], pts[7], pts[3]]);
 				triangles.push([pts[0], pts[3], pts[7]]); triangles.push([pts[0], pts[7], pts[4]]);
