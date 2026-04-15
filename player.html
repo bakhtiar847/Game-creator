@@ -1593,8 +1593,10 @@
 				ctx.fillStyle = fillColor;
 				ctx.fill(); ctx.strokeStyle = strokeColor; ctx.lineWidth=1; ctx.stroke();
 			}
+		}
 
-				this.resize(); this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+		render(){
+			this.resize(); this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
 				// update camera: place inside top-center-front of player (eye position)
 				const eyeHeight = 40; // above player origin
 				const forwardOffset = 30; // in front of player
