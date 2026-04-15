@@ -1251,14 +1251,19 @@
 				const wheelRL = { x: x-hx*0.75, y: wheelY, z: z+hz };
 				const wheelRR = { x: x+hx*0.75, y: wheelY, z: z+hz };
 			
-			// Create 3D wheel geometry (torus-like using rings)
-			const wheelPositions = [wheelFL, wheelFR, wheelRL, wheelRR];
+			// Create 3D wheel geometry (torus-like using rings) in LOCAL coordinates
+			const wheelPositionsLocal = [
+				{x: -hx*0.75, y: 2, z: -hz},  // Front Left
+				{x: hx*0.75, y: 2, z: -hz},   // Front Right
+				{x: -hx*0.75, y: 2, z: hz},   // Rear Left
+				{x: hx*0.75, y: 2, z: hz}     // Rear Right
+			];
 			car._wheelTris = [];
-			for(const wheelCenter of wheelPositions){
+			for(const wheelCenter of wheelPositionsLocal){
 				const segments = 8;
 				const thickness = 2;
 				const verts = [];
-				// Create two rings (inner and outer)
+				// Create two rings (inner and outer) in local coordinates
 				for(let i = 0; i < segments; i++){
 					const angle = (i / segments) * Math.PI * 2;
 					const cos = Math.cos(angle);
