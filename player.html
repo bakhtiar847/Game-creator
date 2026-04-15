@@ -1556,6 +1556,16 @@
 						renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3, isTaillight:true});
 					}
 				}
+				// add wheels for cars
+				if(obj._wheelTris){
+					for(const tri of obj._wheelTris){
+						const pa = this.projectPoint(tri[0]);
+						const pb = this.projectPoint(tri[1]);
+						const pc = this.projectPoint(tri[2]);
+						if(!pa||!pb||!pc) continue;
+						renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3, isWheel:true});
+					}
+				}
 			}
 			renderList.sort((a,b)=>b.depth - a.depth);
 			for(const it of renderList){
@@ -1579,7 +1589,12 @@
 				}
 				
 				// Use triangle's color if available, otherwise use object's color
-				if(!it.isWindow && !it.isHeadlight && !it.isTaillight && it.tri.color){
+				if(!it.isWindow && !it.isHeadlight && !it.isTaillight && !it.isWheel && it.tri.color){
+					fillColor = hexToRgba(it.tri.color, 0.95);
+					strokeColor = shadeColor(it.tri.color, 0.9);
+				}
+				// Use wheel color if it's a wheel
+				if(it.isWheel && it.tri.color){
 					fillColor = hexToRgba(it.tri.color, 0.95);
 					strokeColor = shadeColor(it.tri.color, 0.9);
 				}
@@ -1587,23 +1602,7 @@
 				ctx.fillStyle = fillColor;
 				ctx.fill(); ctx.strokeStyle = strokeColor; ctx.lineWidth=1; ctx.stroke();
 			}
-			
-			// draw 3D wheels for cars
-			for(const obj of this.objects){
-				if(obj.world !== this.player.world) continue;
-				if(!obj._wheelTris) continue;
-				
-				for(const tri of obj._wheelTris){
-					const pa = this.projectPoint(tri[0]);
-					const pb = this.projectPoint(tri[1]);
-					const pc = this.projectPoint(tri[2]);
-					if(!pa||!pb||!pc) continue;
-					renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3, isWheel:true});
-				}
-			}
-		}
 
-			render(){
 				this.resize(); this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
 				// update camera: place inside top-center-front of player (eye position)
 				const eyeHeight = 40; // above player origin
