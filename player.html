@@ -374,16 +374,16 @@
 			const heightLayers = 4; // vertical layers for canopy
 			const topHeight = baseY + radius * 1.8;
 			
-			// Create spherical section by layers
+			// Create spherical section by layers (from top tapering down)
 			for(let layer = 0; layer < heightLayers; layer++){
 				const layerFraction = layer / heightLayers;
 				const nextLayerFraction = (layer + 1) / heightLayers;
 				
-				// Height of this layer (parabolic for natural canopy shape)
-				const y1 = baseY + (radius * 0.3) + (radius * layerFraction * 1.5);
-				const y2 = baseY + (radius * 0.3) + (radius * nextLayerFraction * 1.5);
+				// Height of this layer (starts at top, goes down) - REVERSED from before
+				const y1 = topHeight - (radius * layerFraction * 1.5);
+				const y2 = topHeight - (radius * nextLayerFraction * 1.5);
 				
-				// Radius at this layer (largest in middle, tapers at top and bottom)
+				// Radius at this layer (smallest at top, widest in middle, tapers at bottom)
 				const r1 = radius * Math.sqrt(layerFraction * (2 - layerFraction));
 				const r2 = radius * Math.sqrt(nextLayerFraction * (2 - nextLayerFraction));
 				
@@ -412,21 +412,21 @@
 				}
 			}
 			
-			// Add top point (apex of foliage)
+			// Add apex point at the very top
 			const apex = {x: localX, y: topHeight, z: 0};
-			const lastLayer = heightLayers - 1;
-			const lastLayerFraction = lastLayer / heightLayers;
-			const lastY = baseY + (radius * 0.3) + (radius * lastLayerFraction * 1.5);
-			const lastR = radius * Math.sqrt(lastLayerFraction * (2 - lastLayerFraction));
+			const firstLayerFraction = 0;
+			const firstR = radius * Math.sqrt(firstLayerFraction * (2 - firstLayerFraction));
+			const firstY = topHeight;
 			
+			// Connect apex to first layer
 			for(let i = 0; i < segments; i++){
 				const ni = (i + 1) % segments;
 				const angle1 = (i / segments) * Math.PI * 2;
 				const angle2 = (ni / segments) * Math.PI * 2;
-				const v1 = {x: localX + Math.cos(angle1) * lastR, y: lastY, z: Math.sin(angle1) * lastR};
-				const v2 = {x: localX + Math.cos(angle2) * lastR, y: lastY, z: Math.sin(angle2) * lastR};
+				const v1 = {x: localX + Math.cos(angle1) * firstR, y: firstY, z: Math.sin(angle1) * firstR};
+				const v2 = {x: localX + Math.cos(angle2) * firstR, y: firstY, z: Math.sin(angle2) * firstR};
 				
-				const tri = [v1, v2, apex];
+				const tri = [apex, v2, v1];
 				tri.color = color;
 				tris.push(tri);
 			}
