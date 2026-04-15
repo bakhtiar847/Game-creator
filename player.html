@@ -203,11 +203,11 @@
 				this.climbHeight = data && typeof data.climbHeight !== 'undefined' ? data.climbHeight : 60;
 			}
 
-			static buildLadderGeometry(x, y, z, height = 80, width = 24, rungSpacing = 12){
-				// Build detailed ladder mesh with side rails and rungs
+			static buildLadderGeometry(height = 80, width = 24, rungSpacing = 12){
+				// Build detailed ladder mesh in LOCAL coordinates (relative to ladder origin)
 				const triangles = [];
-				const LEFT_X = x - width/2;
-				const RIGHT_X = x + width/2;
+				const LEFT_X = -width/2;
+				const RIGHT_X = width/2;
 				const railThickness = 4;
 				const rungRadius = 2.5;
 				
@@ -215,87 +215,86 @@
 				// Front face (visible)
 				for(let h = 0; h < height; h += rungSpacing * 2){
 					const h1 = Math.min(h + rungSpacing * 2, height);
-					const z_off = z - 3;
+					const z_off = -3;
 					// Left rail front
 					triangles.push([
-						{x: LEFT_X, y: y + h, z: z_off},
-						{x: LEFT_X, y: y + h1, z: z_off},
-						{x: LEFT_X + railThickness, y: y + h1, z: z_off}
+						{x: LEFT_X, y: h, z: z_off},
+						{x: LEFT_X, y: h1, z: z_off},
+						{x: LEFT_X + railThickness, y: h1, z: z_off}
 					]);
 					triangles.push([
-						{x: LEFT_X, y: y + h, z: z_off},
-						{x: LEFT_X + railThickness, y: y + h1, z: z_off},
-						{x: LEFT_X + railThickness, y: y + h, z: z_off}
+						{x: LEFT_X, y: h, z: z_off},
+						{x: LEFT_X + railThickness, y: h1, z: z_off},
+						{x: LEFT_X + railThickness, y: h, z: z_off}
 					]);
 					// Right rail front
 					triangles.push([
-						{x: RIGHT_X - railThickness, y: y + h, z: z_off},
-						{x: RIGHT_X - railThickness, y: y + h1, z: z_off},
-						{x: RIGHT_X, y: y + h1, z: z_off}
+						{x: RIGHT_X - railThickness, y: h, z: z_off},
+						{x: RIGHT_X - railThickness, y: h1, z: z_off},
+						{x: RIGHT_X, y: h1, z: z_off}
 					]);
 					triangles.push([
-						{x: RIGHT_X - railThickness, y: y + h, z: z_off},
-						{x: RIGHT_X, y: y + h1, z: z_off},
-						{x: RIGHT_X, y: y + h, z: z_off}
+						{x: RIGHT_X - railThickness, y: h, z: z_off},
+						{x: RIGHT_X, y: h1, z: z_off},
+						{x: RIGHT_X, y: h, z: z_off}
 					]);
 				}
 				
 				// Back face (rails)
-				const z_back = z + 3;
+				const z_back = 3;
 				for(let h = 0; h < height; h += rungSpacing * 2){
 					const h1 = Math.min(h + rungSpacing * 2, height);
 					// Left rail back
 					triangles.push([
-						{x: LEFT_X + railThickness, y: y + h, z: z_back},
-						{x: LEFT_X + railThickness, y: y + h1, z: z_back},
-						{x: LEFT_X, y: y + h1, z: z_back}
+						{x: LEFT_X + railThickness, y: h, z: z_back},
+						{x: LEFT_X + railThickness, y: h1, z: z_back},
+						{x: LEFT_X, y: h1, z: z_back}
 					]);
 					triangles.push([
-						{x: LEFT_X + railThickness, y: y + h, z: z_back},
-						{x: LEFT_X, y: y + h1, z: z_back},
-						{x: LEFT_X, y: y + h, z: z_back}
+						{x: LEFT_X + railThickness, y: h, z: z_back},
+						{x: LEFT_X, y: h1, z: z_back},
+						{x: LEFT_X, y: h, z: z_back}
 					]);
 					// Right rail back
 					triangles.push([
-						{x: RIGHT_X, y: y + h, z: z_back},
-						{x: RIGHT_X - railThickness, y: y + h1, z: z_back},
-						{x: RIGHT_X - railThickness, y: y + h, z: z_back}
+						{x: RIGHT_X, y: h, z: z_back},
+						{x: RIGHT_X - railThickness, y: h1, z: z_back},
+						{x: RIGHT_X - railThickness, y: h, z: z_back}
 					]);
 					triangles.push([
-						{x: RIGHT_X, y: y + h, z: z_back},
-						{x: RIGHT_X, y: y + h1, z: z_back},
-						{x: RIGHT_X - railThickness, y: y + h1, z: z_back}
+						{x: RIGHT_X, y: h, z: z_back},
+						{x: RIGHT_X, y: h1, z: z_back},
+						{x: RIGHT_X - railThickness, y: h1, z: z_back}
 					]);
 				}
 				
 				// Horizontal rungs (steps)
 				for(let h = 0; h < height; h += rungSpacing){
-					const z_near = z - rungRadius;
-					const z_far = z + rungRadius;
-					const y_pos = y + h;
+					const z_near = -rungRadius;
+					const z_far = rungRadius;
 					
 					// Rung top
 					triangles.push([
-						{x: LEFT_X + railThickness, y: y_pos + rungRadius, z: z_near},
-						{x: RIGHT_X - railThickness, y: y_pos + rungRadius, z: z_near},
-						{x: RIGHT_X - railThickness, y: y_pos + rungRadius, z: z_far}
+						{x: LEFT_X + railThickness, y: h + rungRadius, z: z_near},
+						{x: RIGHT_X - railThickness, y: h + rungRadius, z: z_near},
+						{x: RIGHT_X - railThickness, y: h + rungRadius, z: z_far}
 					]);
 					triangles.push([
-						{x: LEFT_X + railThickness, y: y_pos + rungRadius, z: z_near},
-						{x: RIGHT_X - railThickness, y: y_pos + rungRadius, z: z_far},
-						{x: LEFT_X + railThickness, y: y_pos + rungRadius, z: z_far}
+						{x: LEFT_X + railThickness, y: h + rungRadius, z: z_near},
+						{x: RIGHT_X - railThickness, y: h + rungRadius, z: z_far},
+						{x: LEFT_X + railThickness, y: h + rungRadius, z: z_far}
 					]);
 					
 					// Rung bottom
 					triangles.push([
-						{x: LEFT_X + railThickness, y: y_pos - rungRadius, z: z_near},
-						{x: RIGHT_X - railThickness, y: y_pos - rungRadius, z: z_far},
-						{x: RIGHT_X - railThickness, y: y_pos - rungRadius, z: z_near}
+						{x: LEFT_X + railThickness, y: h - rungRadius, z: z_near},
+						{x: RIGHT_X - railThickness, y: h - rungRadius, z: z_far},
+						{x: RIGHT_X - railThickness, y: h - rungRadius, z: z_near}
 					]);
 					triangles.push([
-						{x: LEFT_X + railThickness, y: y_pos - rungRadius, z: z_near},
-						{x: LEFT_X + railThickness, y: y_pos - rungRadius, z: z_far},
-						{x: RIGHT_X - railThickness, y: y_pos - rungRadius, z: z_far}
+						{x: LEFT_X + railThickness, y: h - rungRadius, z: z_near},
+						{x: LEFT_X + railThickness, y: h - rungRadius, z: z_far},
+						{x: RIGHT_X - railThickness, y: h - rungRadius, z: z_far}
 					]);
 				}
 				
@@ -306,9 +305,9 @@
 				const id = Date.now() + Math.floor(Math.random()*1000);
 				const l = new Ladder({ id, name:'Ladder', x:x, y:y, z:z, color:'#6b4423', world, isworld:true, iswall:true });
 				
-				// Build detailed ladder mesh
+				// Build detailed ladder mesh in local coordinates
 				const height = 80;
-				l.triangles = Ladder.buildLadderGeometry(x, y, z, height);
+				l._baseTris = Ladder.buildLadderGeometry(height);
 				
 				// collision tetrahedron
 				l.tetrahedrons = [ { a:{x:x-6,y:y,z:z-6}, b:{x:x+6,y:y,z:z-6}, c:{x:x+6,y:y+height,z:z+6}, d:{x:x-6,y:y+height,z:z+6} } ];
