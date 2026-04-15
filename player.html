@@ -1635,6 +1635,25 @@
 							if(t.color) tri.color = t.color;
 							obj._renderTris.push(tri);
 						}
+						// wheels: apply rotation and translation
+						if(obj._wheelTris && obj.rotY !== undefined){
+							const cos = Math.cos(obj.rotY);
+							const sin = Math.sin(obj.rotY);
+							for(const t of obj._wheelTris){
+								// rotate each vertex and translate to world position
+								const rotateVert = (v) => {
+									const rx = v.x * cos - v.z * sin;
+									const rz = v.x * sin + v.z * cos;
+									return {x: obj.x + rx, y: obj.y + v.y, z: obj.z + rz};
+								};
+								const a = rotateVert(t[0]);
+								const b = rotateVert(t[1]);
+								const c = rotateVert(t[2]);
+								const tri = [a,b,c];
+								if(t.color) tri.color = t.color;
+								obj._renderTris.push(tri);
+							}
+						}
 						// lid: rotate verts around hinge (back top edge)
 						if(obj._lidTemplate){
 							const lid = obj._lidTemplate; const dims = obj._chestDims;
