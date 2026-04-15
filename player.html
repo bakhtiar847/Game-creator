@@ -1588,32 +1588,17 @@
 				ctx.fill(); ctx.strokeStyle = strokeColor; ctx.lineWidth=1; ctx.stroke();
 			}
 			
-			// draw wheels for cars
+			// draw 3D wheels for cars
 			for(const obj of this.objects){
 				if(obj.world !== this.player.world) continue;
-				if(!obj._wheelPositions || !obj._wheelRadius) continue;
+				if(!obj._wheelTris) continue;
 				
-				for(const wheelPos of obj._wheelPositions){
-					const p = this.projectPoint(wheelPos);
-					if(!p) continue;
-					
-					ctx.save();
-					ctx.fillStyle = hexToRgba('#1a1a1a', 0.95); // dark gray/black wheels
-					ctx.strokeStyle = shadeColor('#000000', 0.8);
-					ctx.lineWidth = 1.5;
-					ctx.beginPath();
-					ctx.arc(p.x, p.y, obj._wheelRadius * p.scale, 0, Math.PI * 2);
-					ctx.fill();
-					ctx.stroke();
-					
-					// add rim highlight
-					ctx.strokeStyle = '#666666';
-					ctx.lineWidth = 1;
-					ctx.beginPath();
-					ctx.arc(p.x, p.y, obj._wheelRadius * p.scale * 0.6, 0, Math.PI * 2);
-					ctx.stroke();
-					
-					ctx.restore();
+				for(const tri of obj._wheelTris){
+					const pa = this.projectPoint(tri[0]);
+					const pb = this.projectPoint(tri[1]);
+					const pc = this.projectPoint(tri[2]);
+					if(!pa||!pb||!pc) continue;
+					renderList.push({obj, tri, pa, pb, pc, depth:(pa.z+pb.z+pc.z)/3, isWheel:true});
 				}
 			}
 		}
