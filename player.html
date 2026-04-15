@@ -192,7 +192,7 @@
 			}
 		}
 
-		// Ladder class
+		// Ladder class with detailed wood and moss texture
 		class Ladder extends WorldObject {
 			constructor(data){
 				super(data);
@@ -203,11 +203,120 @@
 				this.climbHeight = data && typeof data.climbHeight !== 'undefined' ? data.climbHeight : 60;
 			}
 
+			static buildLadderGeometry(x, y, z, height = 80, width = 24, rungSpacing = 12){
+				// Build detailed ladder mesh with side rails and rungs
+				const triangles = [];
+				const LEFT_X = x - width/2;
+				const RIGHT_X = x + width/2;
+				const railThickness = 4;
+				const rungRadius = 2.5;
+				
+				// Left and right vertical rails
+				// Front face (visible)
+				for(let h = 0; h < height; h += rungSpacing * 2){
+					const h1 = Math.min(h + rungSpacing * 2, height);
+					const z_off = z - 3;
+					// Left rail front
+					triangles.push([
+						{x: LEFT_X, y: y + h, z: z_off},
+						{x: LEFT_X, y: y + h1, z: z_off},
+						{x: LEFT_X + railThickness, y: y + h1, z: z_off}
+					]);
+					triangles.push([
+						{x: LEFT_X, y: y + h, z: z_off},
+						{x: LEFT_X + railThickness, y: y + h1, z: z_off},
+						{x: LEFT_X + railThickness, y: y + h, z: z_off}
+					]);
+					// Right rail front
+					triangles.push([
+						{x: RIGHT_X - railThickness, y: y + h, z: z_off},
+						{x: RIGHT_X - railThickness, y: y + h1, z: z_off},
+						{x: RIGHT_X, y: y + h1, z: z_off}
+					]);
+					triangles.push([
+						{x: RIGHT_X - railThickness, y: y + h, z: z_off},
+						{x: RIGHT_X, y: y + h1, z: z_off},
+						{x: RIGHT_X, y: y + h, z: z_off}
+					]);
+				}
+				
+				// Back face (rails)
+				const z_back = z + 3;
+				for(let h = 0; h < height; h += rungSpacing * 2){
+					const h1 = Math.min(h + rungSpacing * 2, height);
+					// Left rail back
+					triangles.push([
+						{x: LEFT_X + railThickness, y: y + h, z: z_back},
+						{x: LEFT_X + railThickness, y: y + h1, z: z_back},
+						{x: LEFT_X, y: y + h1, z: z_back}
+					]);
+					triangles.push([
+						{x: LEFT_X + railThickness, y: y + h, z: z_back},
+						{x: LEFT_X, y: y + h1, z: z_back},
+						{x: LEFT_X, y: y + h, z: z_back}
+					]);
+					// Right rail back
+					triangles.push([
+						{x: RIGHT_X, y: y + h, z: z_back},
+						{x: RIGHT_X - railThickness, y: y + h1, z: z_back},
+						{x: RIGHT_X - railThickness, y: y + h, z: z_back}
+					]);
+					triangles.push([
+						{x: RIGHT_X, y: y + h, z: z_back},
+						{x: RIGHT_X, y: y + h1, z: z_back},
+						{x: RIGHT_X - railThickness, y: y + h1, z: z_back}
+					]);
+				}
+				
+				// Horizontal rungs (steps)
+				for(let h = 0; h < height; h += rungSpacing){
+					const z_near = z - rungRadius;
+					const z_far = z + rungRadius;
+					const y_pos = y + h;
+					
+					// Rung top
+					triangles.push([
+						{x: LEFT_X + railThickness, y: y_pos + rungRadius, z: z_near},
+						{x: RIGHT_X - railThickness, y: y_pos + rungRadius, z: z_near},
+						{x: RIGHT_X - railThickness, y: y_pos + rungRadius, z: z_far}
+					]);
+					triangles.push([
+						{x: LEFT_X + railThickness, y: y_pos + rungRadius, z: z_near},
+						{x: RIGHT_X - railThickness, y: y_pos + rungRadius, z: z_far},
+						{x: LEFT_X + railThickness, y: y_pos + rungRadius, z: z_far}
+					]);
+					
+					// Rung bottom
+					triangles.push([
+						{x: LEFT_X + railThickness, y: y_pos - rungRadius, z: z_near},
+						{x: RIGHT_X - railThickness, y: y_pos - rungRadius, z: z_far},
+						{x: RIGHT_X - railThickness, y: y_pos - rungRadius, z: z_near}
+					]);
+					triangles.push([
+						{x: LEFT_X + railThickness, y: y_pos - rungRadius, z: z_near},
+						{x: LEFT_X + railThickness, y: y_pos - rungRadius, z: z_far},
+						{x: RIGHT_X - railThickness, y: y_pos - rungRadius, z: z_far}
+					]);
+				}
+				
+				return triangles;
+			}
+
 			static spawn(x,y,z,world=0){
 				const id = Date.now() + Math.floor(Math.random()*1000);
-				const l = new Ladder({ id, name:'Ladder', x:x, y:y, z:z, color:'#c68642', world, isworld:true, iswall:true });
-				// simple thin tetrahedron to represent ladder
-				l.tetrahedrons = [ { a:{x:x-6,y:y,z:z-6}, b:{x:x+6,y:y,z:z-6}, c:{x:x+6,y:y+80,z:z+6}, d:{x:x-6,y:y+80,z:z+6} } ];
+				const l = new Ladder({ id, name:'Ladder', x:x, y:y, z:z, color:'#6b4423', world, isworld:true, iswall:true });
+				
+				// Build detailed ladder mesh
+				const height = 80;
+				l.triangles = Ladder.buildLadderGeometry(x, y, z, height);
+				
+				// collision tetrahedron
+				l.tetrahedrons = [ { a:{x:x-6,y:y,z:z-6}, b:{x:x+6,y:y,z:z-6}, c:{x:x+6,y:y+height,z:z+6}, d:{x:x-6,y:y+height,z:z+6} } ];
+				
+				// Create moss and wood aged texture
+				const textureUrl = createLadderTexture();
+				loadTexture(l, textureUrl);
+				
 				objects.push(l); return l;
 			}
 		}
@@ -251,6 +360,144 @@
 			c.fillStyle = grad; c.fill();
 			// subtle border
 			c.lineWidth = 2; c.strokeStyle = 'rgba(0,0,0,0.25)'; c.stroke();
+			return cnv.toDataURL('image/png');
+		}
+
+		// Create aged wood texture with moss, weathering, and screws for ladder
+		function createLadderTexture(w=512, h=512){
+			const cnv = document.createElement('canvas'); cnv.width = w; cnv.height = h;
+			const c = cnv.getContext('2d');
+			
+			// Base wood color (aged wood brown)
+			const baseWoodColor = '#5a3a1f';
+			c.fillStyle = baseWoodColor;
+			c.fillRect(0, 0, w, h);
+			
+			// Wood grain texture using noise
+			const imageData = c.getImageData(0, 0, w, h);
+			const data = imageData.data;
+			
+			// Perlin-like noise for wood grain
+			for(let i = 0; i < w * h; i++){
+				const px = (i % w);
+				const py = Math.floor(i / w);
+				
+				// Create grain pattern using sin/cos waves
+				let grain = 0;
+				grain += Math.sin(px * 0.015 + py * 0.008) * 0.3;
+				grain += Math.sin(py * 0.02 + px * 0.005) * 0.2;
+				grain += Math.sin((px + py) * 0.01) * 0.15;
+				grain = (grain + 0.5) * 0.4;
+				
+				const idx = i * 4;
+				const base = 90 + 58;
+				const r = Math.max(0, Math.min(255, base - grain * 40));
+				const g = Math.max(0, Math.min(255, base - 20 - grain * 60));
+				const b = Math.max(0, Math.min(255, base - 50 - grain * 70));
+				
+				data[idx] = r;     // R
+				data[idx + 1] = g; // G
+				data[idx + 2] = b; // B
+				data[idx + 3] = 255; // A (fully opaque)
+			}
+			c.putImageData(imageData, 0, 0);
+			
+			// Add moss/algae patches (green spots)
+			const mossGrad = c.createRadialGradient(w*0.3, h*0.4, 0, w*0.3, h*0.4, 150);
+			mossGrad.addColorStop(0, 'rgba(92, 140, 80, 0.35)');
+			mossGrad.addColorStop(0.6, 'rgba(70, 110, 60, 0.2)');
+			mossGrad.addColorStop(1, 'rgba(92, 140, 80, 0)');
+			c.fillStyle = mossGrad;
+			c.fillRect(0, 0, w, h);
+			
+			// More moss patches
+			for(let i = 0; i < 5; i++){
+				const mx = Math.random() * w;
+				const my = Math.random() * h;
+				const mr = 40 + Math.random() * 80;
+				const mossGrad2 = c.createRadialGradient(mx, my, 0, mx, my, mr);
+				mossGrad2.addColorStop(0, `rgba(${80+Math.random()*40}, ${120+Math.random()*30}, ${60+Math.random()*20}, 0.25)`);
+				mossGrad2.addColorStop(1, 'rgba(80, 120, 60, 0)');
+				c.fillStyle = mossGrad2;
+				c.beginPath(); c.arc(mx, my, mr, 0, Math.PI*2); c.fill();
+			}
+			
+			// Weathering stains (dark streaks)
+			c.strokeStyle = 'rgba(30, 30, 30, 0.3)';
+			c.lineWidth = 1;
+			for(let i = 0; i < 8; i++){
+				const sx = Math.random() * w;
+				c.beginPath();
+				c.moveTo(sx, 0);
+				for(let y = 0; y < h; y += 20){
+					c.lineTo(sx + Math.sin(y * 0.02) * 8, y);
+				}
+				c.stroke();
+			}
+			
+			// Draw screws as metallic details
+			const screwPositions = [
+				{x: w*0.15, y: h*0.2}, {x: w*0.85, y: h*0.2},
+				{x: w*0.15, y: h*0.5}, {x: w*0.85, y: h*0.5},
+				{x: w*0.15, y: h*0.8}, {x: w*0.85, y: h*0.8},
+				{x: w*0.5, y: h*0.35}, {x: w*0.5, y: h*0.65}
+			];
+			
+			for(const screw of screwPositions){
+				// Screw head shadow (outer dark circle)
+				c.fillStyle = 'rgba(40, 40, 40, 0.6)';
+				c.beginPath(); c.arc(screw.x, screw.y, 10, 0, Math.PI*2); c.fill();
+				
+				// Screw head metal (lighter inner circle)
+				const screwGrad = c.createRadialGradient(screw.x - 2, screw.y - 2, 0, screw.x, screw.y, 8);
+				screwGrad.addColorStop(0, '#d4a574');
+				screwGrad.addColorStop(0.5, '#c49060');
+				screwGrad.addColorStop(1, '#8b6f47');
+				c.fillStyle = screwGrad;
+				c.beginPath(); c.arc(screw.x, screw.y, 7, 0, Math.PI*2); c.fill();
+				
+				// Screw slot
+				c.strokeStyle = 'rgba(60, 60, 60, 0.8)';
+				c.lineWidth = 2;
+				c.beginPath();
+				c.moveTo(screw.x - 3.5, screw.y);
+				c.lineTo(screw.x + 3.5, screw.y);
+				c.stroke();
+				
+				// Rust around screw
+				c.fillStyle = 'rgba(139, 69, 19, 0.2)';
+				c.beginPath(); c.arc(screw.x, screw.y, 12, 0, Math.PI*2); c.fill();
+			}
+			
+			// Rust streaks down from screws
+			c.strokeStyle = 'rgba(139, 69, 19, 0.25)';
+			c.lineWidth = 1;
+			for(const screw of screwPositions){
+				for(let i = 0; i < 3; i++){
+					const offset = (Math.random() - 0.5) * 3;
+					c.beginPath();
+					c.moveTo(screw.x + offset, screw.y + 15);
+					c.lineTo(screw.x + offset + Math.sin(screw.y) * 2, screw.y + 15 + 50 + Math.random() * 30);
+					c.stroke();
+				}
+			}
+			
+			// Age cracks and weathering
+			c.strokeStyle = 'rgba(100, 80, 60, 0.15)';
+			c.lineWidth = 0.5;
+			for(let i = 0; i < 6; i++){
+				c.beginPath();
+				const startX = Math.random() * w;
+				const startY = Math.random() * h;
+				c.moveTo(startX, startY);
+				for(let j = 0; j < 30; j++){
+					const x = startX + Math.cos(Math.random() * Math.PI * 2) * 5;
+					const y = startY + Math.sin(Math.random() * Math.PI * 2) * 3;
+					c.lineTo(x, y);
+				}
+				c.stroke();
+			}
+			
 			return cnv.toDataURL('image/png');
 		}
 
