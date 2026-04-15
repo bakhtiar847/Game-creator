@@ -2050,6 +2050,32 @@
 				const car = objects.find(o=>o.id===player._inVehicle);
 				if(!car){ player._inVehicle = null; }
 				else {
+					// Update car tetrahedrons to match current position and rotation
+					if(car._dims){
+						const hx = car._dims.hx, hy = car._dims.hy, hz = car._dims.hz;
+						const cos = Math.cos(car.rotY || 0);
+						const sin = Math.sin(car.rotY || 0);
+						const rotatePoint = (px, pz) => {
+							const rx = px * cos - pz * sin;
+							const rz = px * sin + pz * cos;
+							return {x: car.x + rx, z: car.z + rz};
+						};
+						const a = Object.assign(rotatePoint(-hx, -hz), {y: car.y});
+						const b = Object.assign(rotatePoint(hx, -hz), {y: car.y});
+						const c = Object.assign(rotatePoint(-hx, hz), {y: car.y});
+						const d = Object.assign(rotatePoint(hx, hz), {y: car.y});
+						const e = Object.assign(rotatePoint(-hx, -hz), {y: car.y + hy});
+						const f = Object.assign(rotatePoint(hx, -hz), {y: car.y + hy});
+						const g = Object.assign(rotatePoint(-hx, hz), {y: car.y + hy});
+						const h = Object.assign(rotatePoint(hx, hz), {y: car.y + hy});
+						car.tetrahedrons = [
+							{a:a,b:b,c:c,d:e},
+							{a:b,b:d,c:h,d:f},
+							{a:b,b:f,c:e,d:h},
+							{a:c,b:e,c:g,d:h},
+							{a:b,b:c,c:e,d:h}
+						];
+					}
 					// throttle/brake
 					const maxSpeed = car.maxSpeed || 320; const accel = car.accel || 420;
 					if(keysDown.has('i')) car.speedForward = Math.min(maxSpeed, (car.speedForward||0) + accel * dt);
