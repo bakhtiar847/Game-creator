@@ -181,7 +181,7 @@
 				const id = Date.now() + Math.floor(Math.random()*1000);
 				const t = new WorldObject({ id, name: 'Tree', x:x, y:0, z:z, color:'#8B5A2B', actions:[{key:'q',name:'cut'}], world });
 				// trunk mesh (brown) + canopy mesh (green leaves)
-				buildCylinderMesh(t, 6, 40, 18, '#8B5A2B');
+				buildCylinderMesh(t, 6, 50, 18, '#8B5A2B');
 				buildTreeCanopyMesh(t, 0, 40, 25, '#2d8a2d');
 				objects.push(t);
 				return t;
