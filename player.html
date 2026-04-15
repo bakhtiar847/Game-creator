@@ -180,13 +180,9 @@
 			static spawn(x,z, world=0){
 				const id = Date.now() + Math.floor(Math.random()*1000);
 				const t = new WorldObject({ id, name: 'Tree', x:x, y:0, z:z, color:'#8B5A2B', actions:[{key:'q',name:'cut'}], world });
-				// trunk mesh + canopy tets
-				buildCylinderMesh(t, 6, 40, 18);
-				// add simple canopy tetrahedrons above trunk
-				t.tetrahedrons = [
-					{a:{x:x-20,y:40,z:z-20},b:{x:x+20,y:40,z:z-20},c:{x:x,y:80,z:z},d:{x:x,y:55,z:z-40}},
-					{a:{x:x-20,y:45,z:z+20},b:{x:x+20,y:45,z:z+20},c:{x:x,y:85,z:z},d:{x:x,y:60,z:z+40}}
-				];
+				// trunk mesh (brown) + canopy mesh (green leaves)
+				buildCylinderMesh(t, 6, 40, 18, '#8B5A2B');
+				buildTreeCanopyMesh(t, 0, 40, 25, '#2d8a2d');
 				objects.push(t);
 				return t;
 			}
@@ -334,7 +330,7 @@
 		}
 
 		// helper: build a cylinder mesh (local coords) and store as _baseTris
-		function buildCylinderMesh(obj, radius = 6, height = 40, segments = 12){
+		function buildCylinderMesh(obj, radius = 6, height = 40, segments = 12, color = '#888'){
 			const vertsTop = [], vertsBot = [];
 			for(let i=0;i<segments;i++){
 				const a = (i / segments) * Math.PI * 2;
@@ -347,16 +343,93 @@
 			for(let i=0;i<segments;i++){
 				const ni = (i+1) % segments;
 				// two triangles for the quad between segment i and ni
-				tris.push([ vertsBot[i], vertsTop[i], vertsTop[ni] ]);
-				tris.push([ vertsBot[i], vertsTop[ni], vertsBot[ni] ]);
+				const tri1 = [ vertsBot[i], vertsTop[i], vertsTop[ni] ];
+				tri1.color = color;
+				tris.push(tri1);
+				const tri2 = [ vertsBot[i], vertsTop[ni], vertsBot[ni] ];
+				tri2.color = color;
+				tris.push(tri2);
 			}
 			// optional top cap (fan)
 			const centerTop = {x:0,y:height,z:0};
 			for(let i=0;i<segments;i++){
 				const ni = (i+1)%segments;
-				tris.push([ centerTop, vertsTop[i], vertsTop[ni] ]);
+				const tri = [ centerTop, vertsTop[i], vertsTop[ni] ];
+				tri.color = color;
+				tris.push(tri);
 			}
 			obj._baseTris = tris;
+		}
+
+		// helper: build tree canopy (foliage) mesh with green color
+		function buildTreeCanopyMesh(obj, localX, baseY, radius = 25, color = '#2d8a2d'){
+			if(!obj._baseTris) obj._baseTris = [];
+			const tris = obj._baseTris;
+			
+			// create a spherical canopy using icosphere-like triangulation
+			// simple approach: create nested icosahedrons or use quad-to-tri subdivisions
+			// For simplicity, create a series of rings at different heights to approximate foliage
+			
+			const segments = 16; // horizontal segments
+			const heightLayers = 4; // vertical layers for canopy
+			const topHeight = baseY + radius * 1.8;
+			
+			// Create spherical section by layers
+			for(let layer = 0; layer < heightLayers; layer++){
+				const layerFraction = layer / heightLayers;
+				const nextLayerFraction = (layer + 1) / heightLayers;
+				
+				// Height of this layer (parabolic for natural canopy shape)
+				const y1 = baseY + (radius * 0.3) + (radius * layerFraction * 1.5);
+				const y2 = baseY + (radius * 0.3) + (radius * nextLayerFraction * 1.5);
+				
+				// Radius at this layer (largest in middle, tapers at top and bottom)
+				const r1 = radius * Math.sqrt(layerFraction * (2 - layerFraction));
+				const r2 = radius * Math.sqrt(nextLayerFraction * (2 - nextLayerFraction));
+				
+				// Create vertices for this ring
+				const verts1 = [], verts2 = [];
+				for(let i = 0; i < segments; i++){
+					const angle = (i / segments) * Math.PI * 2;
+					const cos = Math.cos(angle);
+					const sin = Math.sin(angle);
+					verts1.push({x: localX + cos * r1, y: y1, z: sin * r1});
+					verts2.push({x: localX + cos * r2, y: y2, z: sin * r2});
+				}
+				
+				// Create quads and triangles between layers
+				for(let i = 0; i < segments; i++){
+					const ni = (i + 1) % segments;
+					
+					// Two triangles per quad
+					const tri1 = [verts1[i], verts2[i], verts2[ni]];
+					tri1.color = color;
+					tris.push(tri1);
+					
+					const tri2 = [verts1[i], verts2[ni], verts1[ni]];
+					tri2.color = color;
+					tris.push(tri2);
+				}
+			}
+			
+			// Add top point (apex of foliage)
+			const apex = {x: localX, y: topHeight, z: 0};
+			const lastLayer = heightLayers - 1;
+			const lastLayerFraction = lastLayer / heightLayers;
+			const lastY = baseY + (radius * 0.3) + (radius * lastLayerFraction * 1.5);
+			const lastR = radius * Math.sqrt(lastLayerFraction * (2 - lastLayerFraction));
+			
+			for(let i = 0; i < segments; i++){
+				const ni = (i + 1) % segments;
+				const angle1 = (i / segments) * Math.PI * 2;
+				const angle2 = (ni / segments) * Math.PI * 2;
+				const v1 = {x: localX + Math.cos(angle1) * lastR, y: lastY, z: Math.sin(angle1) * lastR};
+				const v2 = {x: localX + Math.cos(angle2) * lastR, y: lastY, z: Math.sin(angle2) * lastR};
+				
+				const tri = [v1, v2, apex];
+				tri.color = color;
+				tris.push(tri);
+			}
 		}
 
 		// create simple color texture (data URL) for small sprites/icons
@@ -1530,7 +1603,10 @@
 							const a = {x: obj.x + t[0].x, y: obj.y + t[0].y, z: obj.z + t[0].z};
 							const b = {x: obj.x + t[1].x, y: obj.y + t[1].y, z: obj.z + t[1].z};
 							const c = {x: obj.x + t[2].x, y: obj.y + t[2].y, z: obj.z + t[2].z};
-							obj._renderTris.push([a,b,c]);
+							const tri = [a,b,c];
+							// preserve triangle color if available
+							if(t.color) tri.color = t.color;
+							obj._renderTris.push(tri);
 						}
 						// lid: rotate verts around hinge (back top edge)
 						if(obj._lidTemplate){
