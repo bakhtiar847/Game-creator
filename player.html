@@ -287,6 +287,30 @@
 				addScrew(RIGHT_X - railThickness + 1, h, 2.5, 0.6);
 			}
 			
+			// Gray side screws aligned with rungs
+			function addSideScrew(x, y, z, size = 0.6) {
+				const segments = 6;
+				for(let s = 0; s < segments; s++){
+					const angle = (s / segments) * Math.PI * 2;
+					const x1 = x + Math.cos(angle) * size;
+					const z1 = z + Math.sin(angle) * size;
+					const angle2 = ((s + 1) / segments) * Math.PI * 2;
+					const x2 = x + Math.cos(angle2) * size;
+					const z2 = z + Math.sin(angle2) * size;
+					const tri = [{x: x1, y: y + size * 0.5, z: z1}, {x: x2, y: y + size * 0.5, z: z2}, {x: x, y: y - size * 0.5, z: z}];
+					tri.color = '#888888'; // gray color for side screws
+					triangles.push(tri);
+				}
+			}
+			
+			// Add gray screws on left and right sides, aligned with rungs
+			for(let h = rungSpacing; h < height; h += rungSpacing){
+				addSideScrew(LEFT_X - 2, h, -3, 0.5);
+				addSideScrew(LEFT_X - 2, h, 3, 0.5);
+				addSideScrew(RIGHT_X + 2, h, -3, 0.5);
+				addSideScrew(RIGHT_X + 2, h, 3, 0.5);
+			}
+			
 			return triangles;
 		}
 
@@ -1441,6 +1465,12 @@
 				} else {
 					fillColor = hexToRgba(obj.color||'#888', 0.95);
 					strokeColor = shadeColor(obj.color||'#444', 0.9);
+				}
+				
+				// Use triangle's color if available, otherwise use object's color
+				if(!it.isWindow && !it.isHeadlight && !it.isTaillight && it.tri.color){
+					fillColor = hexToRgba(it.tri.color, 0.95);
+					strokeColor = shadeColor(it.tri.color, 0.9);
 				}
 				
 				ctx.fillStyle = fillColor;
