@@ -1485,11 +1485,8 @@
 					
 					ctx.restore();
 				}
-					ctx.drawImage(img, -w/2, -h/2, w, h);
-					if(selectedId === o.id){ ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.strokeRect(-w/2,-h/2,w,h); }
-					ctx.restore();
-				}
 			}
+		}
 
 			render(){
 				this.resize(); this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
