@@ -1154,6 +1154,7 @@
 			static spawn(x,y,z,world=0, opts={}){
 				const id = Date.now()+Math.floor(Math.random()*1000);
 				const car = new Car(Object.assign({ id, name: opts.name || 'Car', x, y, z, color: opts.color || '#1e40af', world, isworld:true, iswall:false }, opts));
+				car.rotY = 0; // initialize rotation
 				const carColor = opts.color || '#1e40af';
 				const hx = (opts.hx || 30), hy = (opts.hy || 15), hz = (opts.hz || 18);
 				car._dims = {hx,hy,hz};
