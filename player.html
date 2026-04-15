@@ -1250,17 +1250,37 @@
 				// Rear wheels
 				const wheelRL = { x: x-hx*0.75, y: wheelY, z: z+hz };
 				const wheelRR = { x: x+hx*0.75, y: wheelY, z: z+hz };
-				car._wheelPositions = [wheelFL, wheelFR, wheelRL, wheelRR];
-				car._wheelRadius = wheelRadius;
-				
-				// === HEADLIGHTS (bright yellow) ===
-				const headlightL = { x: x-hx*0.8, y: baseY+hy*0.2, z: z-hz-2 };
-				const headlightR = { x: x+hx*0.8, y: baseY+hy*0.2, z: z-hz-2 };
-				const hlSize = 4;
-				car._headlights = [
-					[ {x:headlightL.x-hlSize,y:headlightL.y,z:headlightL.z}, {x:headlightL.x+hlSize,y:headlightL.y,z:headlightL.z}, {x:headlightL.x,y:headlightL.y+hlSize,z:headlightL.z} ],
-					[ {x:headlightR.x-hlSize,y:headlightR.y,z:headlightR.z}, {x:headlightR.x,y:headlightR.y+hlSize,z:headlightR.z}, {x:headlightR.x+hlSize,y:headlightR.y,z:headlightR.z} ]
-				];
+			
+			// Create 3D wheel geometry (torus-like using rings)
+			const wheelPositions = [wheelFL, wheelFR, wheelRL, wheelRR];
+			car._wheelTris = [];
+			for(const wheelCenter of wheelPositions){
+				const segments = 8;
+				const thickness = 2;
+				const verts = [];
+				// Create two rings (inner and outer)
+				for(let i = 0; i < segments; i++){
+					const angle = (i / segments) * Math.PI * 2;
+					const cos = Math.cos(angle);
+					const sin = Math.sin(angle);
+					// Outer ring
+					verts.push({x: wheelCenter.x + cos*wheelRadius, y: wheelCenter.y + sin*thickness, z: wheelCenter.z});
+					// Inner ring (for torus effect)
+					verts.push({x: wheelCenter.x + cos*(wheelRadius-thickness), y: wheelCenter.y + sin*thickness, z: wheelCenter.z});
+				}
+				// Create triangles between rings
+				for(let i = 0; i < segments; i++){
+					const ni = (i + 1) % segments;
+					const o1 = i * 2;
+					const o2 = ni * 2;
+					const tri1 = [verts[o1], verts[o1+1], verts[o2+1]];
+					const tri2 = [verts[o1], verts[o2+1], verts[o2]];
+					tri1.color = '#1a1a1a';
+					tri2.color = '#1a1a1a';
+					car._wheelTris.push(tri1);
+					car._wheelTris.push(tri2);
+				}
+			}
 				
 				// === TAILLIGHTS (bright red at rear) ===
 				const taillightL = { x: x-hx*0.8, y: baseY+hy*0.2, z: z+hz+2 };
