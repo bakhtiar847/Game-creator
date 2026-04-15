@@ -2075,7 +2075,7 @@
 					const d = Math.hypot((o.x||0) - (ladderObj.x||0), (o.z||0) - (ladderObj.z||0));
 					if(d < nd){ nd = d; nearest = o; }
 				}
-				let target = { x: ladderObj.x, z: ladderObj.z, y: (ladderObj.climbHeight || 60) };
+				let targetTop = { x: ladderObj.x, z: ladderObj.z, y: (ladderObj.climbHeight || 60) };
 				if(nearest && nd < 400){
 					// compute platform top Y by using max vertex Y of its tetrahedrons
 					let topY = -Infinity;
@@ -2086,24 +2086,48 @@
 					}
 					if(!isFinite(topY)) topY = nearest.y || 0;
 					// place player center above platform by player.radius
-					target.x = nearest.x; target.z = nearest.z; target.y = topY + player.radius + 2;
+					targetTop.x = nearest.x; targetTop.z = nearest.z; targetTop.y = topY + player.radius + 2;
 				}
-				// animate from current player pos to target over duration
+				
+				// Two-phase animation: walk to base, then climb
+				const ladderBase = { x: ladderObj.x, y: 5, z: ladderObj.z };
 				const start = { x: player.x, y: player.y, z: player.z };
-				const dur = 600; const t0 = performance.now(); player._isClimbing = true; player.vel.y = 0;
+				const walkDur = 400; // time to walk to ladder base
+				const climbDur = 400; // time to climb to top
+				const t0 = performance.now(); 
+				player._isClimbing = true; 
+				player.vel.y = 0;
+				
 				function easeInOut(t){ return t<0.5 ? 2*t*t : -1 + (4-2*t)*t; }
+				
 				function step(now){
-					const p = Math.min(1, (now - t0) / dur);
-					const e = easeInOut(p);
-					player.x = start.x + (target.x - start.x) * e;
-					player.y = start.y + (target.y - start.y) * e;
-					player.z = start.z + (target.z - start.z) * e;
-					renderer.render();
-					if(p < 1){ requestAnimationFrame(step); }
-					else {
-						player._isClimbing = false; player.vel.y = 0; player.onGround = false;
-						showPickup('Climbed ladder'); saveState(); refresh();
+					const elapsed = now - t0;
+					
+					if(elapsed < walkDur){
+						// Phase 1: Walk to ladder base
+						const p = elapsed / walkDur;
+						const e = easeInOut(p);
+						player.x = start.x + (ladderBase.x - start.x) * e;
+						player.y = start.y + (ladderBase.y - start.y) * e;
+						player.z = start.z + (ladderBase.z - start.z) * e;
+					} else {
+						// Phase 2: Climb from base to top
+						const p = Math.min(1, (elapsed - walkDur) / climbDur);
+						const e = easeInOut(p);
+						player.x = ladderBase.x + (targetTop.x - ladderBase.x) * e;
+						player.y = ladderBase.y + (targetTop.y - ladderBase.y) * e;
+						player.z = ladderBase.z + (targetTop.z - ladderBase.z) * e;
+						
+						if(p >= 1){
+							// Animation complete
+							player._isClimbing = false; player.vel.y = 0; player.onGround = false;
+							showPickup('Climbed ladder'); saveState(); refresh();
+							return;
+						}
 					}
+					
+					renderer.render();
+					requestAnimationFrame(step);
 				}
 				requestAnimationFrame(step);
 			}
