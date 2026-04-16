@@ -1012,7 +1012,7 @@ function loopUser(){
 				document.querySelectorAll('.asset-modal-tab-content').forEach(t => t.style.display = 'none');
 				const uploadTab = document.querySelector('.asset-modal-tab-content[data-tab="upload"]');
 				if(uploadTab) uploadTab.style.display = 'block';
-				document.querySelectorAll('.asset-modal-tab').forEach(btn => {
+				document.querySelectorAll('.asset-modal-tab').forEach(btn = {
 					btn.style.color = 'var(--muted)';
 					btn.style.borderBottomColor = 'transparent';
 				});
