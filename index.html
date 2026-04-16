@@ -1006,6 +1006,28 @@ function loopUser(){
 
 			if(!filtersEl) return;
 
+			function openAssetModal() {
+				if(!assetModalDialog) return;
+				assetModalDialog.classList.add('show');
+				document.querySelectorAll('.asset-modal-tab-content').forEach(t => t.style.display = 'none');
+				const uploadTab = document.querySelector('.asset-modal-tab-content[data-tab="upload"]');
+				if(uploadTab) uploadTab.style.display = 'block';
+				document.querySelectorAll('.asset-modal-tab').forEach(btn => {
+					btn.style.color = 'var(--muted)';
+					btn.style.borderBottomColor = 'transparent';
+				});
+				const uploadBtn = document.querySelector('.asset-modal-tab[data-tab="upload"]');
+				if(uploadBtn) {
+					uploadBtn.style.borderBottomColor = 'var(--accent)';
+					uploadBtn.style.color = '#e6eef8';
+				}
+			}
+
+			if(addAssetBtn) {
+				addAssetBtn.addEventListener('click', openAssetModal);
+				addAssetBtn.onclick = openAssetModal;
+			}
+
 			const assetTemplates = {
 				objects: [
 					{ title: 'Simple Object', description: 'A basic object asset template.', code: 'console.log("Simple Object template loaded");' },
@@ -1229,7 +1251,9 @@ function loopUser(){
 			if(assetTemplateCreateBtn) {
 				assetTemplateCreateBtn.addEventListener('click', createTemplateAsset);
 			}
-			renderTemplateCards();
+			if(assetTemplateTypeSelect && assetTemplateList && assetTemplatePreview && assetTemplateCreateBtn) {
+				renderTemplateCards();
+			}
 
 			// Show/hide modal with tab handling
 			addAssetBtn.addEventListener('click', () => {
