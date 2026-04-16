@@ -343,51 +343,54 @@
 			
 			<!-- Tab Navigation -->
 			<div style="display:flex;gap:8px;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:16px">
-				<button class="asset-modal-tab active" data-tab="upload" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid var(--accent);color:#e6eef8;cursor:pointer;font-weight:600">Upload</button>
-				<button class="asset-modal-tab" data-tab="templates" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-weight:600">Templates</button>
-				<button class="asset-modal-tab" data-tab="paste" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-weight:600">Paste Code</button>
-				<button class="asset-modal-tab" data-tab="empty" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-weight:600">Empty</button>
-			</div>
-			
-			<!-- Tab Content Container -->
-			<div style="flex:1;overflow-y:auto;margin-bottom:16px">
-				<!-- Upload Tab -->
-				<div class="asset-modal-tab-content active" data-tab="upload">
-					<p style="color:var(--muted);font-size:13px;margin:0 0 12px 0">Upload JSON asset files or a folder containing multiple assets.</p>
-					<div style="margin-bottom:16px">
-						<div id="assetDropZone" style="border:2px dashed rgba(255,255,255,0.2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .2s">
-							<div style="font-size:32px;margin-bottom:8px">📁</div>
-							<div style="color:#e6eef8;font-weight:600;margin-bottom:4px">Drop files here or click to browse</div>
-							<div style="font-size:12px;color:var(--muted)">JSON files or folder of JSONs</div>
+					<button class="asset-modal-tab active" data-tab="upload" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid var(--accent);color:#e6eef8;cursor:pointer;font-weight:600">Upload JSON</button>
+					<button class="asset-modal-tab" data-tab="blank" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-weight:600">Create Blank</button>
+					<button class="asset-modal-tab" data-tab="templates" style="padding:8px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-weight:600">Templates</button>
+				</div>
+				
+				<!-- Tab Content Container -->
+				<div style="flex:1;overflow-y:auto;margin-bottom:16px">
+					<!-- Upload JSON Tab -->
+					<div class="asset-modal-tab-content active" data-tab="upload">
+						<p style="color:var(--muted);font-size:13px;margin:0 0 12px 0">Upload JSON asset files. Each file must include a valid type field.</p>
+						<div style="margin-bottom:16px">
+							<div id="assetDropZone" style="border:2px dashed rgba(255,255,255,0.2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .2s">
+								<div style="font-size:32px;margin-bottom:8px">📁</div>
+								<div style="color:#e6eef8;font-weight:600;margin-bottom:4px">Click to browse JSON files</div>
+								<div style="font-size:12px;color:var(--muted)">Files must contain type: 3dasset, InventoryItemAsset, or ToolAsset</div>
+							</div>
+							<input type="file" id="assetFileInput" style="display:none" accept=".json" multiple />
 						</div>
-						<input type="file" id="assetFileInput" style="display:none" accept=".json" multiple />
-						<input type="file" id="assetFolderInput" style="display:none" webkitdirectory directory />
+						<div id="assetUploadList" style="max-height:200px;overflow-y:auto;margin-bottom:16px;background:rgba(0,0,0,0.2);border-radius:6px;padding:8px;font-size:13px;color:var(--muted)">No files uploaded yet.</div>
 					</div>
-					<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-bottom:16px">
-						<span style="font-size:13px;color:var(--muted)">Or create new:</span>
-						<div style="display:flex;gap:6px">
-							<button id="assetNewObjectBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Object</button>
-							<button id="assetNewInventoryBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Inventory Item</button>
-							<button id="assetNewToolBtn" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600">Tool</button>
+					
+					<!-- Create Blank Tab -->
+					<div class="asset-modal-tab-content" data-tab="blank" style="display:none">
+						<p style="color:var(--muted);font-size:13px;margin:0 0 12px 0">Create a blank asset in the correct folder with default console.log code.</p>
+						<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+							<input id="assetBlankNameInput" type="text" placeholder="Asset name" style="flex:1;min-width:180px;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;font-size:13px;font-family:inherit" />
+						</div>
+						<div style="display:flex;gap:6px;flex-wrap:wrap">
+							<button id="assetNewObjectBtn" style="padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600;flex:1;min-width:120px">Create Object</button>
+							<button id="assetNewInventoryBtn" style="padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600;flex:1;min-width:120px">Create Inventory Item</button>
+							<button id="assetNewToolBtn" style="padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;cursor:pointer;font-size:12px;font-weight:600;flex:1;min-width:120px">Create Tool</button>
 						</div>
 					</div>
-					<div id="assetUploadList" style="max-height:200px;overflow-y:auto;margin-bottom:16px;background:rgba(0,0,0,0.2);border-radius:6px;padding:8px"></div>
-				</div>
-				
-				<!-- Templates Tab -->
-				<div class="asset-modal-tab-content" data-tab="templates" style="display:none">
-					<p style="color:var(--muted);font-size:13px;margin:0">Templates coming soon...</p>
-				</div>
-				
-				<!-- Paste Code Tab -->
-				<div class="asset-modal-tab-content" data-tab="paste" style="display:none">
-					<p style="color:var(--muted);font-size:13px;margin:0 0 12px 0">Paste Code coming soon...</p>
-				</div>
-				
-				<!-- Empty Tab -->
-				<div class="asset-modal-tab-content" data-tab="empty" style="display:none">
-					<p style="color:var(--muted);font-size:13px;margin:0">Empty assets coming soon...</p>
-				</div>
+					
+					<!-- Templates Tab -->
+					<div class="asset-modal-tab-content" data-tab="templates" style="display:none">
+						<p style="color:var(--muted);font-size:13px;margin:0 0 12px 0">Choose a template, enter a name, and create it in the correct asset folder.</p>
+						<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+							<input id="assetTemplateNameInput" type="text" placeholder="Asset name" style="flex:1;min-width:180px;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;font-size:13px;font-family:inherit" />
+							<select id="assetTemplateTypeSelect" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e6eef8;font-size:13px;font-family:inherit">
+								<option value="3dasset">Object</option>
+								<option value="InventoryItemAsset">Inventory Item</option>
+								<option value="ToolAsset">Tool</option>
+							</select>
+						</div>
+						<div id="assetTemplateList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:12px"></div>
+						<div id="assetTemplatePreview" style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px;min-height:140px;font-size:12px;line-height:1.5;white-space:pre-wrap;color:#e6eef8;overflow:auto;margin-bottom:12px">Select a template to preview its contents.</div>
+						<button id="assetTemplateCreateBtn" class="open-btn" disabled>Create from Template</button>
 			</div>
 			
 			<!-- Action Buttons -->
