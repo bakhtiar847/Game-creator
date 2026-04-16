@@ -229,11 +229,6 @@
 
 	<main>
 		<section class="panel" id="panelAssets" data-panel>
-			<div style="display:flex;justify-content:space-between;align-items:center">
-				<h3>Assets</h3>
-				<p class="muted" style="margin:0">Manage your project's assets</p>
-			</div>
-
 			<div class="assets-container" id="assetsContainer">
 				<!-- Left: Filters (collapsible) -->
 				<div class="assets-filters" id="assetsFilters">
@@ -1000,6 +995,9 @@ function loopUser(){
 			const assetFileInput = document.getElementById('assetFileInput');
 			const assetUploadList = document.getElementById('assetUploadList');
 			const assetBlankNameInput = document.getElementById('assetBlankNameInput');
+			const assetNewObjectBtn = document.getElementById('assetNewObjectBtn');
+			const assetNewInventoryBtn = document.getElementById('assetNewInventoryBtn');
+			const assetNewToolBtn = document.getElementById('assetNewToolBtn');
 			const assetTemplateNameInput = document.getElementById('assetTemplateNameInput');
 			const assetTemplateTypeSelect = document.getElementById('assetTemplateTypeSelect');
 			const assetTemplateList = document.getElementById('assetTemplateList');
@@ -1195,6 +1193,43 @@ function loopUser(){
 				assetTemplateNameInput.value = '';
 				assetModalDialog.classList.remove('show');
 			}
+
+			if(assetDropZone && assetFileInput) {
+				assetDropZone.addEventListener('click', () => assetFileInput.click());
+				assetDropZone.addEventListener('dragover', (e) => {
+					e.preventDefault();
+					assetDropZone.style.borderColor = 'var(--accent)';
+				});
+				assetDropZone.addEventListener('dragleave', () => {
+					assetDropZone.style.borderColor = 'rgba(255,255,255,0.2)';
+				});
+				assetDropZone.addEventListener('drop', (e) => {
+					e.preventDefault();
+					assetDropZone.style.borderColor = 'rgba(255,255,255,0.2)';
+					handleUploadFiles(e.dataTransfer.files);
+				});
+				assetFileInput.addEventListener('change', (e) => {
+					handleUploadFiles(e.target.files);
+					assetFileInput.value = '';
+				});
+			}
+
+			if(window.assetNewObjectBtn || assetNewObjectBtn) {
+				assetNewObjectBtn.addEventListener('click', () => createBlankAsset('3dasset'));
+			}
+			if(assetNewInventoryBtn) {
+				assetNewInventoryBtn.addEventListener('click', () => createBlankAsset('InventoryItemAsset'));
+			}
+			if(assetNewToolBtn) {
+				assetNewToolBtn.addEventListener('click', () => createBlankAsset('ToolAsset'));
+			}
+			if(assetTemplateTypeSelect) {
+				assetTemplateTypeSelect.addEventListener('change', renderTemplateCards);
+			}
+			if(assetTemplateCreateBtn) {
+				assetTemplateCreateBtn.addEventListener('click', createTemplateAsset);
+			}
+			renderTemplateCards();
 
 			// Show/hide modal with tab handling
 			addAssetBtn.addEventListener('click', () => {
