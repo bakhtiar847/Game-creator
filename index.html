@@ -697,13 +697,22 @@ function loopUser(){
 				]},
 				{name : "assets", type : "folder", children : [
 					{name : "objects", type : "folder", children : [
-						{name : "Sample Object", type : "3dasset", content : JSON.stringify({name: "Sample Object", description: "A demo object asset.", code: "console.log(\"Sample Object asset loaded\");"}, null, 2)}
+						{name : "Sample Object", type : "3dasset", content : JSON.stringify({name: "Sample Object", description: "A demo object asset.", code: "console.log(\"Sample Object asset loaded\");"}, null, 2)},
+						{name : "Templates", type : "folder", children : [
+							{name : "Empty Object", type : "3dasset", content : JSON.stringify({name: "Empty Object", description: "A blank object asset to customize.", code: "console.log(\"Empty Object asset loaded\");"}, null, 2)}
+						]}
 					]},
 					{name : "inventory", type : "folder", children : [
-						{name : "Sample Inventory Item", type : "InventoryItemAsset", content : JSON.stringify({name: "Sample Inventory Item", description: "A demo inventory asset.", code: "console.log(\"Sample Inventory Item loaded\");"}, null, 2)}
+						{name : "Sample Inventory Item", type : "InventoryItemAsset", content : JSON.stringify({name: "Sample Inventory Item", description: "A demo inventory asset.", code: "console.log(\"Sample Inventory Item loaded\");"}, null, 2)},
+						{name : "Templates", type : "folder", children : [
+							{name : "Empty Inventory Item", type : "InventoryItemAsset", content : JSON.stringify({name: "Empty Inventory Item", description: "A blank inventory item asset to customize.", code: "console.log(\"Empty Inventory Item asset loaded\");"}, null, 2)}
+						]}
 					]},
 					{name : "tools", type : "folder", children : [
-						{name : "Sample Tool", type : "ToolAsset", content : JSON.stringify({name: "Sample Tool", description: "A demo tool asset.", code: "console.log(\"Sample Tool loaded\");"}, null, 2)}
+						{name : "Sample Tool", type : "ToolAsset", content : JSON.stringify({name: "Sample Tool", description: "A demo tool asset.", code: "console.log(\"Sample Tool loaded\");"}, null, 2)},
+						{name : "Templates", type : "folder", children : [
+							{name : "Empty TTool", type : "ToolAsset", content : JSON.stringify({name: "Empty Tool", description: "A blank tool asset to customize.", code: "console.log(\"Empty Tool asset loaded\");"}, null, 2)}
+						]}
 					]}
 				]},
 				{name : "notes", type : "folder", children : [
