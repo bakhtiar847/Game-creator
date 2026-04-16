@@ -332,7 +332,7 @@
 	</main>
 
 	<!-- Asset Management Modal with Tabs -->
-	<div class="modal-overlay" id="assetModalDialog" style="display:none">
+	<div class="modal-overlay" id="assetModalDialog">
 		<div class="modal-dialog" style="min-width:500px;max-width:700px;height:auto;max-height:90vh;display:flex;flex-direction:column">
 			<h3 style="margin:0 0 16px 0">Add Asset</h3>
 			
@@ -1048,6 +1048,52 @@ function loopUser(){
 				'InventoryItemAsset': 'inventory',
 				'ToolAsset': 'tools'
 			};
+
+			function getTemplateFolderName(type) {
+				return assetTypeFolderMap[type] || 'objects';
+			}
+
+			function getProjectTemplateItems(type) {
+				const root = FileList && FileList[0];
+				if(!root) return [];
+				const assets = root.children.find(c => c.name === 'assets');
+				if(!assets || !assets.children) return [];
+				const folderName = getTemplateFolderName(type);
+				const typeFolder = assets.children.find(c => c.name === folderName && c.type === 'folder');
+				if(!typeFolder || !typeFolder.children) return [];
+				const templatesFolder = typeFolder.children.find(c => c.name === 'Templates' && c.type === 'folder');
+				if(!templatesFolder || !templatesFolder.children) return [];
+				return templatesFolder.children.filter(item => item.content).map(item => {
+					let parsed = null;
+					try {
+						parsed = JSON.parse(item.content);
+					} catch (err) {
+						parsed = null;
+					}
+					return {
+						title: item.name,
+						description: parsed && parsed.description ? parsed.description : '',
+						code: parsed && parsed.code ? parsed.code : item.content,
+						originalContent: item.content,
+						originalItem: item
+					};
+				});
+			}
+
+			function getTemplateDefinitions(type) {
+				const projectTemplates = getProjectTemplateItems(type);
+				if(projectTemplates.length > 0) return projectTemplates;
+				const folderName = getTemplateFolderName(type);
+				return (assetTemplates[folderName] || []).map(template => ({
+					...template,
+					originalContent: JSON.stringify({
+						name: template.title,
+						type,
+						description: template.description,
+						code: template.code
+					}, null, 2)
+				}));
+			}
 
 			function getTypeFromJson(json) {
 				return json.type || json.thpe || '';
