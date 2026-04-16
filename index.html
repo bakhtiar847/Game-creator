@@ -261,20 +261,7 @@
 							<button class="open-btn" id="addAssetBtn" style="flex:1;padding:6px 12px;font-size:12px">+ Add Asset</button>
 						</div>
 					</div>
-					<div class="assets-grid" id="assetsGrid">
-						<div class="asset-item" data-asset="sample1" data-type="images">
-							<div class="asset-thumb"></div>
-							<div style="font-size:12px">Sample Image</div>
-						</div>
-						<div class="asset-item" data-asset="sample2" data-type="objects">
-							<div class="asset-thumb"></div>
-							<div style="font-size:12px">Game Object</div>
-						</div>
-						<div class="asset-item" data-asset="sample3" data-type="tools">
-							<div class="asset-thumb"></div>
-							<div style="font-size:12px">Sample Tool</div>
-						</div>
-					</div>
+<div class="assets-grid" id="assetsGrid"></div>
 				</div>
 
 				<!-- Resizer between library and preview -->
@@ -1501,19 +1488,23 @@ ${assets}
 			const assets = FileList[0].children.find(c => c.name === 'assets');
 			if(!assets || !assets.children) return '';
 			const assetCode = [];
-			for(const typeFolder of assets.children) {
-				if(typeFolder.type !== 'folder' || !typeFolder.children) continue;
-				for(const assetFile of typeFolder.children) {
-					if((assetFile.type === '3dasset' || assetFile.type == "InventoryItemAsset" || assetFile.type == "ToolAsset") && assetFile.content) {
-						try {
-							const assetJson = JSON.parse(assetFile.content);
-							if(assetJson.code) {
-								assetCode.push(assetJson.code);
-							}
-						} catch(err) {
-							console.warn('Failed to parse asset:', assetFile.name, err);
+			function processAssetFile(assetFile) {
+				if((assetFile.type === '3dasset' || assetFile.type == "InventoryItemAsset" || assetFile.type == "ToolAsset") && assetFile.content) {
+					try {
+						const assetJson = JSON.parse(assetFile.content);
+						if(assetJson.code) {
+							assetCode.push(assetJson.code);
 						}
+					} catch(err) {
+						console.warn('Failed to parse asset:', assetFile.name, err);
 					}
+				}
+			}
+			for(const typeFolder of assets.children) {
+				if(typeFolder.type === 'folder' && typeFolder.children) {
+					typeFolder.children.forEach(processAssetFile);
+				} else {
+					processAssetFile(typeFolder);
 				}
 			}
 			return assetCode.join('\n\n// == COMPILER/ASSETSEPARATOR ==\n\n');
