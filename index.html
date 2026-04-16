@@ -709,7 +709,7 @@ function loopUser(){
 }
 `},
 				]},
-				{name : "assets", type : "folder", children : []},
+				{name : "assets", type : "folder", children : [{name : "Sample Asset", type : "3dasset", content : ""}]},
 				{name : "notes", type : "folder", children : [
 					{name : "welcome", type : "htmlnote", content : "<html><head><title>Welcome</title></head><body><h1>Welcome to the Game Creator!</h1></body></html>"},
 					{name : "main", type : "plaintext", content : "Put your notes here..."},
@@ -1504,7 +1504,7 @@ ${assets}
 			for(const typeFolder of assets.children) {
 				if(typeFolder.type !== 'folder' || !typeFolder.children) continue;
 				for(const assetFile of typeFolder.children) {
-					if(assetFile.type === 'json' && assetFile.content) {
+					if(assetFile.type === '3dasset' && assetFile.content) {
 						try {
 							const assetJson = JSON.parse(assetFile.content);
 							if(assetJson.code) {
