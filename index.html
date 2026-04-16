@@ -696,7 +696,17 @@ function loopUser(){
 }
 `},
 				]},
-				{name : "assets", type : "folder", children : [{name : "Sample Asset", type : "3dasset", content : ""}, {name : "Sample Inventory Item", type : "InventoryItemAsset", content : ""}, {name : "Sample Tool", type : "ToolAsset", content : ""}]},
+				{name : "assets", type : "folder", children : [
+					{name : "objects", type : "folder", children : [
+						{name : "Sample Object", type : "3dasset", content : JSON.stringify({name: "Sample Object", description: "A demo object asset.", code: "console.log(\"Sample Object asset loaded\");"}, null, 2)}
+					]},
+					{name : "inventory", type : "folder", children : [
+						{name : "Sample Inventory Item", type : "InventoryItemAsset", content : JSON.stringify({name: "Sample Inventory Item", description: "A demo inventory asset.", code: "console.log(\"Sample Inventory Item loaded\");"}, null, 2)}
+					]},
+					{name : "tools", type : "folder", children : [
+						{name : "Sample Tool", type : "ToolAsset", content : JSON.stringify({name: "Sample Tool", description: "A demo tool asset.", code: "console.log(\"Sample Tool loaded\");"}, null, 2)}
+					]}
+				]},
 				{name : "notes", type : "folder", children : [
 					{name : "welcome", type : "htmlnote", content : "<html><head><title>Welcome</title></head><body><h1>Welcome to the Game Creator!</h1></body></html>"},
 					{name : "main", type : "plaintext", content : "Put your notes here..."},
@@ -1024,6 +1034,112 @@ function loopUser(){
 					assetModalDialog.classList.remove('show');
 				});
 			}
+
+			let selectedAsset = null;
+			function findAssetsFolder() {
+				return FileList && FileList[0] && FileList[0].children.find(c => c.name === 'assets');
+			}
+
+			function collectAssetEntries() {
+				const assets = findAssetsFolder();
+				if(!assets || !assets.children) return [];
+				const entries = [];
+				for(const child of assets.children) {
+					if(child.type === 'folder' && child.children) {
+						for(const assetFile of child.children) {
+							if(['3dasset','InventoryItemAsset','ToolAsset'].includes(assetFile.type)) {
+								entries.push({ file: assetFile, folderName: child.name, assetType: assetFile.type });
+							}
+						}
+					} else if(['3dasset','InventoryItemAsset','ToolAsset'].includes(child.type)) {
+						entries.push({ file: child, folderName: child.type === '3dasset' ? 'objects' : child.type === 'InventoryItemAsset' ? 'inventory' : 'tools', assetType: child.type });
+					}
+				}
+				return entries;
+			}
+
+			function assetTypeLabel(folderName) {
+				switch(folderName) {
+					case 'objects': return 'Object';
+					case 'inventory': return 'Inventory';
+					case 'tools': return 'Tool';
+					default: return folderName;
+				}
+			}
+
+			function renderAssetPreview(entry) {
+				if(!entry) {
+					assetsPreviewContent.textContent = 'Select an asset to preview';
+					assetsOpenBtn.disabled = true;
+					assetsDownloadBtn.disabled = true;
+					return;
+				}
+				let previewText = `Name: ${entry.file.name}\nType: ${entry.assetType}\nLocation: assets/${entry.folderName}`;
+				try {
+					const parsed = JSON.parse(entry.file.content || '{}');
+					if(parsed.description) previewText += `\nDescription: ${parsed.description}`;
+				} catch(err) {
+					// ignore parse errors for preview
+				}
+				assetsPreviewContent.textContent = previewText;
+				assetsOpenBtn.disabled = false;
+				assetsDownloadBtn.disabled = false;
+			}
+
+			function renderAssetsGrid() {
+				assetsGrid.innerHTML = '';
+				const filters = Array.from(filtersEl.querySelectorAll('input[type="checkbox"]'));
+				const query = assetSearch.value.trim().toLowerCase();
+				const entries = collectAssetEntries().filter(entry => {
+					const filter = filters.find(cb => cb.dataset.type === entry.folderName);
+					if(filter && !filter.checked) return false;
+					if(!query) return true;
+					return entry.file.name.toLowerCase().includes(query) || (entry.file.content || '').toLowerCase().includes(query);
+				});
+				if(entries.length === 0) {
+					assetsGrid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px;">No assets found.</div>';
+					selectedAsset = null;
+					renderAssetPreview(null);
+					return;
+				}
+				for(const entry of entries) {
+					const item = document.createElement('div');
+					item.className = 'asset-item';
+					item.dataset.assetName = entry.file.name;
+					item.dataset.assetFolder = entry.folderName;
+					item.dataset.assetType = entry.assetType;
+					item.innerHTML = `<div class="asset-thumb"></div><div style="font-size:12px">${entry.file.name}</div><div class="muted" style="font-size:10px">${assetTypeLabel(entry.folderName)}</div>`;
+					item.addEventListener('click', () => {
+						document.querySelectorAll('.asset-item').forEach(el => el.classList.remove('selected'));
+						item.classList.add('selected');
+						selectedAsset = entry;
+						renderAssetPreview(entry);
+					});
+					assetsGrid.appendChild(item);
+				}
+				selectedAsset = null;
+				renderAssetPreview(null);
+			}
+
+			assetSearch.addEventListener('input', renderAssetsGrid);
+			filtersEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.addEventListener('change', renderAssetsGrid));
+			renderAssetsGrid();
+
+			assetsOpenBtn.addEventListener('click', () => {
+				if(!selectedAsset) return;
+				window.loadAssetIntoEditor && window.loadAssetIntoEditor(selectedAsset);
+			});
+
+			assetsDownloadBtn.addEventListener('click', () => {
+				if(!selectedAsset) return;
+				const blob = new Blob([selectedAsset.file.content || ''], { type: 'application/json' });
+				const url = URL.createObjectURL(blob);
+				const link = document.createElement('a');
+				link.href = url;
+				link.download = `${selectedAsset.file.name}.json`;
+				link.click();
+				URL.revokeObjectURL(url);
+			});
 
 			// Collapse/expand filters
 			filtersToggle.addEventListener('click', () => {
