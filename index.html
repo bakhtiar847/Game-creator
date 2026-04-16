@@ -996,8 +996,205 @@ function loopUser(){
 			const assetsDownloadBtn = document.getElementById('assetsDownloadBtn');
 			const addAssetBtn = document.getElementById('addAssetBtn');
 			const assetModalDialog = document.getElementById('assetModalDialog');
+			const assetDropZone = document.getElementById('assetDropZone');
+			const assetFileInput = document.getElementById('assetFileInput');
+			const assetUploadList = document.getElementById('assetUploadList');
+			const assetBlankNameInput = document.getElementById('assetBlankNameInput');
+			const assetTemplateNameInput = document.getElementById('assetTemplateNameInput');
+			const assetTemplateTypeSelect = document.getElementById('assetTemplateTypeSelect');
+			const assetTemplateList = document.getElementById('assetTemplateList');
+			const assetTemplatePreview = document.getElementById('assetTemplatePreview');
+			const assetTemplateCreateBtn = document.getElementById('assetTemplateCreateBtn');
 
 			if(!filtersEl) return;
+
+			const assetTemplates = {
+				objects: [
+					{ title: 'Simple Object', description: 'A basic object asset template.', code: 'console.log("Simple Object template loaded");' },
+					{ title: 'Player Spawn', description: 'A starter object with a spawn marker.', code: 'console.log("Player Spawn template loaded");' }
+				],
+				inventory: [
+					{ title: 'Health Item', description: 'A simple inventory item template.', code: 'console.log("Health Item template loaded");' },
+					{ title: 'Gold Coin', description: 'A collectible resource item template.', code: 'console.log("Gold Coin template loaded");' }
+				],
+				tools: [
+					{ title: 'Basic Tool', description: 'A simple tool asset template.', code: 'console.log("Basic Tool template loaded");' },
+					{ title: 'Axe Tool', description: 'A tool asset template with hit behavior.', code: 'console.log("Axe Tool template loaded");' }
+				]
+			};
+
+			const assetTypeFolderMap = {
+				'3dasset': 'objects',
+				'InventoryItemAsset': 'inventory',
+				'ToolAsset': 'tools'
+			};
+
+			function getTypeFromJson(json) {
+				return json.type || json.thpe || '';
+			}
+
+			function getAssetFolderByType(type) {
+				const root = FileList && FileList[0];
+				if(!root) return null;
+				let assets = root.children.find(c => c.name === 'assets');
+				if(!assets) {
+					assets = { name: 'assets', type: 'folder', children: [] };
+					root.children.push(assets);
+				}
+				const folderName = assetTypeFolderMap[type];
+				if(!folderName) return null;
+				let folder = assets.children.find(c => c.name === folderName && c.type === 'folder');
+				if(!folder) {
+					folder = { name: folderName, type: 'folder', children: [] };
+					assets.children.push(folder);
+				}
+				return folder;
+			}
+
+			function normalizeAssetName(name) {
+				return name.trim() || 'New Asset';
+			}
+
+			function getUniqueAssetName(folder, baseName) {
+				let name = normalizeAssetName(baseName);
+				let suffix = 1;
+				while(folder.children.some(child => child.name === name)) {
+					name = `${normalizeAssetName(baseName)}_${suffix++}`;
+				}
+				return name;
+			}
+
+			function addAssetFileToProject(fileName, type, content) {
+				const folder = getAssetFolderByType(type);
+				if(!folder) return null;
+				const uniqueName = getUniqueAssetName(folder, fileName.replace(/\.json$/i, ''));
+				const assetFile = { name: uniqueName, type, content };
+				folder.children.push(assetFile);
+				saveProjectToStorage();
+				renderAssetsGrid();
+				return assetFile;
+			}
+
+			function renderUploadResults(results) {
+				if(!assetUploadList) return;
+				if(results.length === 0) {
+					assetUploadList.textContent = 'No files uploaded yet.';
+					return;
+				}
+				assetUploadList.innerHTML = '';
+				results.forEach(result => {
+					const entry = document.createElement('div');
+					entry.style.marginBottom = '6px';
+					entry.style.padding = '8px';
+					entry.style.borderRadius = '6px';
+					entry.style.background = result.status === 'success' ? 'rgba(56,146,255,0.12)' : 'rgba(255,85,85,0.12)';
+					entry.style.color = '#e6eef8';
+					entry.innerHTML = `<strong>${result.fileName}</strong><br>${result.message}`;
+					assetUploadList.appendChild(entry);
+				});
+			}
+
+			function handleUploadFiles(fileList) {
+				if(!fileList || fileList.length === 0) return;
+				const results = [];
+				Array.from(fileList).forEach(file => {
+					const result = { fileName: file.name, status: 'pending', message: 'Processing...' };
+					results.push(result);
+					const reader = new FileReader();
+					reader.onload = () => {
+						try {
+							const parsed = JSON.parse(reader.result);
+							const type = getTypeFromJson(parsed);
+							if(!['3dasset','InventoryItemAsset','ToolAsset'].includes(type)) {
+								result.status = 'error';
+								result.message = `Invalid or missing type field: ${type || 'none'}`;
+							} else {
+								const assetName = parsed.name || file.name.replace(/\.json$/i, '') || 'New Asset';
+								addAssetFileToProject(assetName, type, JSON.stringify(parsed, null, 2));
+								result.status = 'success';
+								result.message = `Imported as ${type} in assets/${assetTypeFolderMap[type]}`;
+							}
+						} catch(err) {
+							result.status = 'error';
+							result.message = 'Invalid JSON: ' + err.message;
+						}
+						renderUploadResults(results);
+					};
+					reader.onerror = () => {
+						result.status = 'error';
+						result.message = 'Unable to read file';
+						renderUploadResults(results);
+					};
+					reader.readAsText(file);
+				});
+			}
+
+			function createBlankAsset(type) {
+				if(!type) return;
+				const label = type === '3dasset' ? 'Object' : type === 'InventoryItemAsset' ? 'Inventory Item' : 'Tool';
+				const name = normalizeAssetName(assetBlankNameInput.value || `New ${label}`);
+				const content = {
+					name,
+					type,
+					description: `Blank ${label} asset.`,
+					code: `console.log(\"${name} (${label}) created\");`
+				};
+				addAssetFileToProject(name, type, JSON.stringify(content, null, 2));
+				assetBlankNameInput.value = '';
+			}
+
+			let selectedTemplateIndex = null;
+			function getTemplateFolderName(type) {
+				return assetTypeFolderMap[type] || 'objects';
+			}
+
+			function renderTemplateCards() {
+				const type = assetTemplateTypeSelect.value;
+				const folderName = getTemplateFolderName(type);
+				const templates = assetTemplates[folderName] || [];
+				assetTemplateList.innerHTML = '';
+				selectedTemplateIndex = null;
+				assetTemplatePreview.textContent = 'Select a template to preview its contents.';
+				assetTemplateCreateBtn.disabled = true;
+				templates.forEach((template, index) => {
+					const card = document.createElement('button');
+					card.type = 'button';
+					card.style.padding = '10px';
+					card.style.border = '1px solid rgba(255,255,255,0.1)';
+					card.style.borderRadius = '8px';
+					card.style.background = 'rgba(255,255,255,0.03)';
+					card.style.color = '#e6eef8';
+					card.style.cursor = 'pointer';
+					card.style.textAlign = 'left';
+					card.innerHTML = `<strong style="font-size:13px">${template.title}</strong><div style="font-size:11px;color:var(--muted);margin-top:4px">${template.description}</div>`;
+					card.addEventListener('click', () => {
+						selectedTemplateIndex = index;
+						Array.from(assetTemplateList.children).forEach(child => child.style.borderColor = 'rgba(255,255,255,0.1)');
+						card.style.borderColor = 'var(--accent)';
+						assetTemplatePreview.textContent = template.code;
+						assetTemplateCreateBtn.disabled = false;
+					});
+					assetTemplateList.appendChild(card);
+				});
+			}
+
+			function createTemplateAsset() {
+				const type = assetTemplateTypeSelect.value;
+				const folderName = getTemplateFolderName(type);
+				const templates = assetTemplates[folderName] || [];
+				if(selectedTemplateIndex === null || !templates[selectedTemplateIndex]) return;
+				const template = templates[selectedTemplateIndex];
+				const name = normalizeAssetName(assetTemplateNameInput.value || template.title);
+				const content = {
+					name,
+					type,
+					description: template.description,
+					code: template.code
+				};
+				addAssetFileToProject(name, type, JSON.stringify(content, null, 2));
+				assetTemplateNameInput.value = '';
+				assetModalDialog.classList.remove('show');
+			}
 
 			// Show/hide modal with tab handling
 			addAssetBtn.addEventListener('click', () => {
