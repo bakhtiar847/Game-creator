@@ -243,8 +243,7 @@
 					</div>
 					<input id="assetSearch" class="filters-search" placeholder="Search assets..." />
 					<div style="font-size:13px;color:var(--muted);margin-top:6px">
-						<label><input type="checkbox" data-type="images" checked /> Images</label><br />
-						<label><input type="checkbox" data-type="objects" checked /> Objects</label><br />
+							<label><input type="checkbox" data-type="objects" checked /> Objects</label><br />
 						<label><input type="checkbox" data-type="inventory" checked /> Inventory Items</label><br />
 					<label><input type="checkbox" data-type="tools" checked /> Tools</label>
 					</div>
@@ -982,6 +981,7 @@ function loopUser(){
 			const assetsGrid = document.getElementById('assetsGrid');
 			const assetsPreviewContent = document.getElementById('assetsPreviewContent');
 			const assetsOpenBtn = document.getElementById('assetsOpenBtn');
+			const assetsDownloadBtn = document.getElementById('assetsDownloadBtn');
 			const addAssetBtn = document.getElementById('addAssetBtn');
 			const assetModalDialog = document.getElementById('assetModalDialog');
 
@@ -1517,6 +1517,23 @@ function loopUser(){
 					codeEditorTextarea.dataset.editingAsset = '';
 					codeEditorTextarea.dataset.editingAssetType = '';
 				}
+			};
+
+			window.loadAssetIntoEditor = function(entry){
+				if(!entry || !entry.file) return;
+				document.querySelectorAll('.code-file-item').forEach(f => f.classList.remove('selected'));
+				currentEditingFile = null;
+				codeEditorHeader.textContent = entry.file.name;
+				let editorValue = '';
+				try {
+					const parsed = JSON.parse(entry.file.content || '{}');
+					editorValue = parsed.code || '';
+				} catch(err) {
+					editorValue = entry.file.content || '';
+				}
+				codeEditorTextarea.value = editorValue;
+				codeEditorTextarea.dataset.editingAsset = entry.file.name;
+				codeEditorTextarea.dataset.editingAssetType = entry.folderName || '';
 			};
 		})();
 
