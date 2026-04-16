@@ -391,7 +391,7 @@
 			<!-- Action Buttons -->
 			<div style="display:flex;gap:8px;justify-content:flex-end">
 				<button class="modal-btn modal-btn-secondary" onclick="document.getElementById('assetModalDialog').classList.remove('show')">Cancel</button>
-				<button id="assetUploadConfirmBtn" class="modal-btn modal-btn-primary">Import Assets</button>
+				<button id="assetUploadConfirmBtn" class="modal-btn modal-btn-primary">Done</button>
 			</div>
 		</div>
 	</div>
@@ -1214,7 +1214,7 @@ function loopUser(){
 				});
 			}
 
-			if(window.assetNewObjectBtn || assetNewObjectBtn) {
+			if(assetNewObjectBtn) {
 				assetNewObjectBtn.addEventListener('click', () => createBlankAsset('3dasset'));
 			}
 			if(assetNewInventoryBtn) {
