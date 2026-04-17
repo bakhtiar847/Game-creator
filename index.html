@@ -703,9 +703,10 @@ function loopUser(){
 					{name : "inventory", type : "folder", children : [
 						{name : "Sample Inventory Item", type : "InventoryItemAsset", content : JSON.stringify({name: "Sample Inventory Item", description: "A demo inventory asset.", code: "console.log(\"Sample Inventory Item loaded\");", worldObject: ""}, null, 2)},
 						{name : "Gold Coin", type : "InventoryItemAsset", content : JSON.stringify({name: "Gold Coin", description: "A simple gold coin asset.", code: `
-						class GoldCoin extends InventoryItem { constructor(qty=1, worldClass=null){ super('gold','Gold',qty, worldClass); } }
-						console.log(\"Gold Coin loaded\");`, worldObject: `
-								class GoldWorld extends WorldObject {
+						class GoldCoin extends InventoryItem { constructor(qty=1, worldClass=GoldCoinWorld){ super('goldcoin','Gold Coin',qty, worldClass); } }
+						console.log(\"Gold Coin loaded\");
+						`, worldObject: `
+								class GoldCoinWorld extends WorldObject {
 			constructor(data){
 				super(data);
 				this.actions = this.actions || [];
@@ -714,18 +715,18 @@ function loopUser(){
 				this.inventoryItemConstructor = data && data.inventoryItemConstructor || null;
 			}
 			open(){
-				const ItemCtor = this.inventoryItemConstructor || GoldItem;
+				const ItemCtor = this.inventoryItemConstructor || GoldCoinItem;
 				if(!ItemCtor) return;
-				const existing = inventory.find(it=>it.id==='gold');
+				const existing = inventory.find(it=>it.id==='goldcoin');
 				if(existing) existing.qty = (existing.qty||0)+1;
 				else inventory.push(new ItemCtor(1, this.constructor));
-				showPickup('Picked up Gold'); saveState();
+				showPickup('Picked up Gold Coins'); saveState();
 				const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh();
 			}
 			static spawn(x,y,z,world=0){
 				const id = Date.now()+Math.floor(Math.random()*1000);
-				const g = new GoldWorld({ id, name:'Gold', x,y,z, color:'#ffd700', world, isworld:false, iswall:false });
-				g.inventoryItemConstructor = GoldItem;
+				const g = new GoldCoinWorld({ id, name:'Gold Coins', x,y,z, color:'#ffd700', world, isworld:false, iswall:false });
+				g.inventoryItemConstructor = GoldCoinItem;
 				g.tetrahedrons = [ { a:{x:x-6,y:0,z:z-6}, b:{x:x+6,y:0,z:z-6}, c:{x:x+6,y:12,z:z+6}, d:{x:x-6,y:12,z:z+6} } ];
 				objects.push(g); return g;
 			}
