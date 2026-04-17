@@ -701,15 +701,44 @@ function loopUser(){
 						]}
 					]},
 					{name : "inventory", type : "folder", children : [
-						{name : "Sample Inventory Item", type : "InventoryItemAsset", content : JSON.stringify({name: "Sample Inventory Item", description: "A demo inventory asset.", code: "console.log(\"Sample Inventory Item loaded\");"}, null, 2)},
+						{name : "Sample Inventory Item", type : "InventoryItemAsset", content : JSON.stringify({name: "Sample Inventory Item", description: "A demo inventory asset.", code: "console.log(\"Sample Inventory Item loaded\");", worldObject: ""}, null, 2)},
+						{name : "Gold Coin", type : "InventoryItemAsset", content : JSON.stringify({name: "Gold Coin", description: "A simple gold coin asset.", code: `
+						class GoldCoin extends InventoryItem { constructor(qty=1, worldClass=null){ super('gold','Gold',qty, worldClass); } }
+						console.log(\"Gold Coin loaded\");`, worldObject: `
+								class GoldWorld extends WorldObject {
+			constructor(data){
+				super(data);
+				this.actions = this.actions || [];
+				this.actions.push({ key:'q', name:'pickup' });
+				// pointer to inventory item constructor (set by spawn)
+				this.inventoryItemConstructor = data && data.inventoryItemConstructor || null;
+			}
+			open(){
+				const ItemCtor = this.inventoryItemConstructor || GoldItem;
+				if(!ItemCtor) return;
+				const existing = inventory.find(it=>it.id==='gold');
+				if(existing) existing.qty = (existing.qty||0)+1;
+				else inventory.push(new ItemCtor(1, this.constructor));
+				showPickup('Picked up Gold'); saveState();
+				const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh();
+			}
+			static spawn(x,y,z,world=0){
+				const id = Date.now()+Math.floor(Math.random()*1000);
+				const g = new GoldWorld({ id, name:'Gold', x,y,z, color:'#ffd700', world, isworld:false, iswall:false });
+				g.inventoryItemConstructor = GoldItem;
+				g.tetrahedrons = [ { a:{x:x-6,y:0,z:z-6}, b:{x:x+6,y:0,z:z-6}, c:{x:x+6,y:12,z:z+6}, d:{x:x-6,y:12,z:z+6} } ];
+				objects.push(g); return g;
+			}
+		}
+						`}, null, 2)},
 						{name : "Templates", type : "folder", children : [
-							{name : "Empty Inventory Item", type : "InventoryItemAsset", content : JSON.stringify({name: "Empty Inventory Item", description: "A blank inventory item asset to customize.", code: "console.log(\"Empty Inventory Item asset loaded\");"}, null, 2)}
+							{name : "Empty Inventory Item", type : "InventoryItemAsset", content : JSON.stringify({name: "Empty Inventory Item", description: "A blank inventory item asset to customize.", code: "console.log(\"Empty Inventory Item asset loaded\");", worldObject: ""}, null, 2)}
 						]}
 					]},
 					{name : "tools", type : "folder", children : [
-						{name : "Sample Tool", type : "ToolAsset", content : JSON.stringify({name: "Sample Tool", description: "A demo tool asset.", code: "console.log(\"Sample Tool loaded\");"}, null, 2)},
+						{name : "Sample Tool", type : "ToolAsset", content : JSON.stringify({name: "Sample Tool", description: "A demo tool asset.", code: "console.log(\"Sample Tool loaded\");", worldObject: ""}, null, 2)},
 						{name : "Templates", type : "folder", children : [
-							{name : "Empty TTool", type : "ToolAsset", content : JSON.stringify({name: "Empty Tool", description: "A blank tool asset to customize.", code: "console.log(\"Empty Tool asset loaded\");"}, null, 2)}
+							{name : "Empty Tool", type : "ToolAsset", content : JSON.stringify({name: "Empty Tool", description: "A blank tool asset to customize.", code: "console.log(\"Empty Tool asset loaded\");", worldObject: ""}, null, 2)}
 						]}
 					]}
 				]},
@@ -1205,6 +1234,9 @@ function loopUser(){
 					description: `Blank ${label} asset.`,
 					code: `console.log(\"${name} (${label}) created\");`
 				};
+				if(type === 'InventoryItemAsset' || type === 'ToolAsset') {
+					content.worldObject = "console.log('World part init');";
+				}
 				addAssetFileToProject(name, type, JSON.stringify(content, null, 2));
 				assetBlankNameInput.value = '';
 			}
@@ -1257,6 +1289,9 @@ function loopUser(){
 					description: template.description,
 					code: template.code
 				};
+				if(type === 'InventoryItemAsset' || type === 'ToolAsset') {
+					content.worldObject = {};
+				}
 				addAssetFileToProject(name, type, JSON.stringify(content, null, 2));
 				assetTemplateNameInput.value = '';
 				assetModalDialog.classList.remove('show');
@@ -1919,12 +1954,20 @@ ${assets}
 			const assets = FileList[0].children.find(c => c.name === 'assets');
 			if(!assets || !assets.children) return '';
 			const assetCode = [];
+			function safeVarName(name) {
+				return (name || 'asset').replace(/[^a-zA-Z0-9_$]/g, '_').replace(/^([0-9])/, '_$1');
+			}
 			function processAssetFile(assetFile) {
 				if((assetFile.type === '3dasset' || assetFile.type == "InventoryItemAsset" || assetFile.type == "ToolAsset") && assetFile.content) {
 					try {
 						const assetJson = JSON.parse(assetFile.content);
 						if(assetJson.code) {
 							assetCode.push(assetJson.code);
+						}
+						if(assetFile.type === 'InventoryItemAsset' || assetFile.type === 'ToolAsset') {
+							const worldObject = assetJson.worldObject || {};
+							const varName = safeVarName(assetFile.name);
+							assetCode.push(`\nif(typeof ${varName} !== 'undefined') { ${varName}.worldObject = ${JSON.stringify(worldObject, null, 2)}; }`);
 						}
 					} catch(err) {
 						console.warn('Failed to parse asset:', assetFile.name, err);
