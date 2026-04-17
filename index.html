@@ -1560,6 +1560,21 @@ function loopUser(){
 					name.textContent = item.name;
 					folder.appendChild(name);
 					
+					const actionsDiv = document.createElement('div');
+					actionsDiv.style.display = 'flex';
+					actionsDiv.style.alignItems = 'center';
+					actionsDiv.style.gap = '6px';
+					const addBtn = document.createElement('button');
+					addBtn.className = 'code-file-action-btn';
+					addBtn.textContent = '+';
+					addBtn.title = 'Add script/folder here';
+					addBtn.addEventListener('click', (e) => {
+						e.stopPropagation();
+						showCreateDialog('code-folder', item);
+					});
+					actionsDiv.appendChild(addBtn);
+					folder.appendChild(actionsDiv);
+					
 					li.appendChild(folder);
 					
 					const nested = document.createElement('ul');
@@ -1624,16 +1639,17 @@ function loopUser(){
 				return li;
 			}
 
-			function showCreateDialog(context = 'code'){
+			function showCreateDialog(context = 'code', targetFolder = null){
 				window.dialogMode = 'create';
 				window.dialogContext = context;
-				dialogTitle.textContent = context === 'code' ? 'New Script' : 'New File/Folder';
+				window.dialogTargetFolder = targetFolder;
+				dialogTitle.textContent = context === 'code' ? 'New Script' : context === 'code-folder' ? 'New Script or Folder' : 'New File/Folder';
 				dialogInput.value = '';
 				dialogInput.placeholder = 'Enter name...';
 				// Populate type options
 				const dialogType = document.getElementById('dialogType');
 				dialogType.innerHTML = '';
-				if(context === 'code'){
+				if(context === 'code' || context === 'code-folder'){
 					dialogType.innerHTML = '<option value="javascript">JavaScript</option><option value="folder">Folder</option>';
 					dialogType.value = 'javascript';
 				} else {
@@ -1673,19 +1689,23 @@ function loopUser(){
 				}
 			}
 
-			function createNewFile(name, type){
-				const scripts = getScriptsFolder();
-				if(scripts){
-					let newItem;
-					if(type === 'folder'){
-						newItem = {name, type: 'folder', children: []};
-					} else {
-						newItem = {name, type, content: type === 'javascript' ? `// ${name}\nconsole.log('Hello from ${name}!');` : ''};
-					}
-					scripts.children.push(newItem);
-					renderCodeFileTree();
-					saveProjectToStorage();
+			function createNewFile(name, type, parentFolder = null){
+				const scripts = parentFolder || getScriptsFolder();
+				if(!scripts) return;
+				let newItem;
+				if(type === 'folder'){
+					newItem = {name, type: 'folder', children: []};
+				} else {
+					newItem = {name, type, content: type === 'javascript' ? `// ${name}\nconsole.log('Hello from ${name}!');` : ''};
 				}
+				if(parentFolder){
+					parentFolder.children = parentFolder.children || [];
+					parentFolder.children.push(newItem);
+				} else {
+					scripts.children.push(newItem);
+				}
+				renderCodeFileTree();
+				saveProjectToStorage();
 			}
 
 			window.createNewFile = createNewFile;
@@ -1708,6 +1728,8 @@ function loopUser(){
 					if(window.dialogMode === 'create'){
 						if(window.dialogContext === 'code'){
 							window.createNewFile(name, type);
+						} else if(window.dialogContext === 'code-folder'){
+							window.createNewFile(name, type, window.dialogTargetFolder);
 						} else {
 							window.createFileInFolder(name, type);
 						}
