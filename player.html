@@ -158,8 +158,6 @@
 		// auto-load textures only when explicitly requested via textureSrc or isSprite flag
 		for(const o of objects){ if(o.textureSrc) loadTexture(o, o.textureSrc); }
 
-		// (Chest mesh builder moved into Chest class below)
-
 		// Convert plain object literals to GameObject instances
 		objects = objects.map(o => new GameObject(o));
 		// ensure each object has a world coordinate (default world 0)
