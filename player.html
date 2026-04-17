@@ -2351,8 +2351,6 @@
 			// Car for testing
 			Car.spawn(380,0,500,0, { name: 'Car', color: '#2b6f9b' });
 		}
-		// call spawnWorld to populate the scene
-		spawnSampleWorld();
 
 
 		function renderList(){
@@ -2481,6 +2479,8 @@
 
 			function initUser(){
 				// setup code can go here
+				// call spawnWorld to populate the scene if user code is not added
+				spawnSampleWorld();
 			}
 
 			function loopUser(){
