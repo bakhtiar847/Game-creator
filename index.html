@@ -782,12 +782,16 @@ function loopUser(){
 
 		// Show welcome screen if no project was requested via URL
 		if(!projNameRequested) {
-			document.addEventListener('DOMContentLoaded', showWelcome);
-			// Also show immediately if DOM is already loaded
-			if(document.readyState === 'loading') {
-				document.addEventListener('DOMContentLoaded', showWelcome);
-			} else {
+			// Always add DOMContentLoaded listener as a fallback
+			const showWelcomeOnce = () => {
 				showWelcome();
+				document.removeEventListener('DOMContentLoaded', showWelcomeOnce);
+			};
+			document.addEventListener('DOMContentLoaded', showWelcomeOnce);
+			
+			// Try to show immediately if DOM is already loaded
+			if(document.readyState !== 'loading') {
+				setTimeout(showWelcome, 100); // Small delay to ensure DOM is ready
 			}
 		}
 
