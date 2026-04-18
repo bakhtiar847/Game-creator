@@ -756,6 +756,7 @@ function loopUser(){
 		const urlParams = getURLParams();
 		let FileList;
 		let isProjectLoaded = false;
+		let projNameRequested = !!urlParams.projName; // Track if a specific project was requested
 		
 		if(urlParams.projName) {
 			ProjectName = decodeURIComponent(urlParams.projName);
@@ -779,8 +780,8 @@ function loopUser(){
 			FileList = defaultFileList;
 		}
 
-		// Show welcome screen if no project is loaded
-		if(!isProjectLoaded) {
+		// Show welcome screen if no project was requested via URL
+		if(!projNameRequested) {
 			document.addEventListener('DOMContentLoaded', showWelcome);
 			// Also show immediately if DOM is already loaded
 			if(document.readyState === 'loading') {
