@@ -1022,78 +1022,52 @@
 			}
 		}
 
-		// World representations for inventory items
-		class GoldWorld extends WorldObject {
-			constructor(data){
+		// Base class for pickable world items (reduces duplication)
+		class PickableItemWorld extends WorldObject {
+			constructor(data, itemId, itemCtor){
 				super(data);
 				this.actions = this.actions || [];
 				this.actions.push({ key:'q', name:'pickup' });
-				// pointer to inventory item constructor (set by spawn)
-				this.inventoryItemConstructor = data && data.inventoryItemConstructor || null;
+				this.itemId = itemId;
+				this.itemCtor = itemCtor || GoldItem;
+				this.displayName = data ? data.name : 'Item';
 			}
 			open(){
-				const ItemCtor = this.inventoryItemConstructor || GoldItem;
-				if(!ItemCtor) return;
-				const existing = inventory.find(it=>it.id==='gold');
+				if(!this.itemCtor) return;
+				const existing = inventory.find(it=>it.id===this.itemId);
 				if(existing) existing.qty = (existing.qty||0)+1;
-				else inventory.push(new ItemCtor(1, this.constructor));
-				showPickup('Picked up Gold'); saveState();
+				else inventory.push(new this.itemCtor(1, this.constructor));
+				showPickup(`Picked up ${this.displayName}`); saveState();
 				const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh();
 			}
+		}
+
+		// World representations for inventory items
+		class GoldWorld extends PickableItemWorld {
+			constructor(data){ super(data, 'gold', GoldItem); }
 			static spawn(x,y,z,world=0){
 				const id = Date.now()+Math.floor(Math.random()*1000);
 				const g = new GoldWorld({ id, name:'Gold', x,y,z, color:'#ffd700', world, isworld:false, iswall:false });
-				g.inventoryItemConstructor = GoldItem;
 				g.tetrahedrons = [ { a:{x:x-6,y:0,z:z-6}, b:{x:x+6,y:0,z:z-6}, c:{x:x+6,y:12,z:z+6}, d:{x:x-6,y:12,z:z+6} } ];
 				objects.push(g); return g;
 			}
 		}
 
-		class WoodWorld extends WorldObject {
-			constructor(data){
-				super(data);
-				this.actions = this.actions || [];
-				this.actions.push({ key:'q', name:'pickup' });
-				this.inventoryItemConstructor = data && data.inventoryItemConstructor || null;
-			}
-			open(){
-				const ItemCtor = this.inventoryItemConstructor || WoodItem;
-				if(!ItemCtor) return;
-				const existing = inventory.find(it=>it.id==='wood');
-				if(existing) existing.qty = (existing.qty||0)+1;
-				else inventory.push(new ItemCtor(1, this.constructor));
-				showPickup('Picked up Wood'); saveState();
-				const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh();
-			}
+		class WoodWorld extends PickableItemWorld {
+			constructor(data){ super(data, 'wood', WoodItem); }
 			static spawn(x,y,z,world=0){
 				const id = Date.now()+Math.floor(Math.random()*1000);
 				const w = new WoodWorld({ id, name:'Wood', x,y,z, color:'#8B5A2B', world, isworld:false, iswall:false });
-				w.inventoryItemConstructor = WoodItem;
 				w.tetrahedrons=[{a:{x:x-6,y:0,z:z-6},b:{x:x+6,y:0,z:z-6},c:{x:x+6,y:12,z:z+6},d:{x:x-6,y:12,z:z+6}}];
 				objects.push(w); return w;
 			}
 		}
 
-		class AxeWorld extends WorldObject {
-			constructor(data){
-				super(data);
-				this.actions = this.actions || [];
-				this.actions.push({ key:'q', name:'pickup' });
-				this.inventoryItemConstructor = data && data.inventoryItemConstructor || null;
-			}
-			open(){
-				const ItemCtor = this.inventoryItemConstructor || AxeItem;
-				if(!ItemCtor) return;
-				const existing = inventory.find(it=>it.id==='axe');
-				if(existing) existing.qty = (existing.qty||0)+1;
-				else inventory.push(new ItemCtor(1, this.constructor));
-				showPickup('Picked up Axe'); saveState();
-				const idx = objects.findIndex(o=>o.id===this.id); if(idx>=0) objects.splice(idx,1); refresh();
-			}
+		class AxeWorld extends PickableItemWorld {
+			constructor(data){ super(data, 'axe', AxeItem); }
 			static spawn(x,y,z,world=0){
 				const id = Date.now()+Math.floor(Math.random()*1000);
 				const a = new AxeWorld({ id, name:'Axe', x,y,z, color:'#c68642', world, isworld:false, iswall:false });
-				a.inventoryItemConstructor = AxeItem;
 				a.tetrahedrons=[{a:{x:x-6,y:0,z:z-6},b:{x:x+6,y:0,z:z-6},c:{x:x+6,y:20,z:z+6},d:{x:x-6,y:20,z:z+6}}];
 				objects.push(a); return a;
 			}
@@ -2528,6 +2502,18 @@
 			}
 		}
 
+		// reset game to start state (commonly used by new game handlers)
+		function resetGameToStart(){
+			document.cookie = 'game_state=;max-age=0;path=/';
+			inventory = [];
+			clearObjects();
+			player.x = 300; player.y = 100; player.z = 200;
+			player.vel = {x:0,y:0,z:0};
+			paused = false;
+			lastFrame = performance.now();
+			refresh();
+		}
+
 		// events
 		// pause menu buttons wiring
 		document.getElementById('resumeBtn').addEventListener('click', ()=>{ paused = false; hidePauseMenu(); lastFrame = performance.now(); });
@@ -2554,36 +2540,14 @@
 		}
 		document.getElementById('newGameBtn').addEventListener('click', ()=>{
 			if(confirm('Clear all save data and start a new game?')){
-				// Clear save data from cookies
-				document.cookie = 'game_state=;max-age=0;path=/';
-				// Clear objects and reset game state
-				inventory = [];
-				clearObjects();
-				// Reset player position
-				player.x = 300; player.y = 100; player.z = 200;
-				player.vel = {x:0,y:0,z:0};
-				// Hide pause menu
-				paused = false;
+				resetGameToStart();
 				hidePauseMenu();
-				lastFrame = performance.now();
-				refresh();
 			}
 		});
 		document.getElementById('closeInventoryBtn').addEventListener('click', ()=>{ inventoryOpen = false; document.getElementById('inventoryPanel').style.display = 'none'; });
 		document.getElementById('endGameNewGameBtn').addEventListener('click', ()=>{
-			// Clear save data from cookies
-			document.cookie = 'game_state=;max-age=0;path=/';
-			// Clear objects and reset game state
-			inventory = [];
-			clearObjects();
-			// Reset player position
-			player.x = 300; player.y = 100; player.z = 200;
-			player.vel = {x:0,y:0,z:0};
-			// Hide end game dialog
+			resetGameToStart();
 			document.getElementById('endGameDialog').style.display = 'none';
-			paused = false;
-			lastFrame = performance.now();
-			refresh();
 		});
 		document.getElementById('putDownBtn').addEventListener('click', ()=>{
 			// put down selected inventory item into world in front of player
