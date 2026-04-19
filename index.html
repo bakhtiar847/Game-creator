@@ -1839,12 +1839,24 @@ function loopUser(){
 					const hasSelection = start !== end;
 					
 					if(hasSelection) {
-						// Block comment: wrap selection with /* */
+						// Block comment: toggle /* */ on selection
 						const selectedText = value.substring(start, end);
-						const newValue = value.substring(0, start) + '/* ' + selectedText + ' */' + value.substring(end);
+						let newSelectionText;
+						
+						if(selectedText.trim().startsWith('/*') && selectedText.trim().endsWith('*/')) {
+							// Remove block comment
+							newSelectionText = selectedText
+								.replace(/^\s*\/\*\s?/, '')
+								.replace(/\s?\*\/\s*$/, '');
+						} else {
+							// Add block comment
+							newSelectionText = '/* ' + selectedText + ' */';
+						}
+						
+						const newValue = value.substring(0, start) + newSelectionText + value.substring(end);
 						textarea.value = newValue;
 						textarea.selectionStart = start;
-						textarea.selectionEnd = start + selectedText.length + 5; // "/* " + " */"
+						textarea.selectionEnd = start + newSelectionText.length;
 						textarea.dispatchEvent(new Event('input', { bubbles: true }));
 					} else {
 						// Line comment: toggle // on current line, preserving indent
