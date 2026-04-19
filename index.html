@@ -1836,39 +1836,42 @@ function loopUser(){
 				// CTRL+/ or CMD+/ for comment/uncomment
 				if((e.ctrlKey || e.metaKey) && e.key === '/') {
 					e.preventDefault();
-					const lines = value.split('\n');
-					const startLine = value.substring(0, start).split('\n').length - 1;
-					const endLine = value.substring(0, end).split('\n').length - 1;
+					const hasSelection = start !== end;
 					
-					// Check if all selected lines are already commented
-					let allCommented = true;
-					for(let i = startLine; i <= endLine; i++) {
-						const trimmed = lines[i].trim();
-						if(trimmed && !trimmed.startsWith('//')) {
-							allCommented = false;
-							break;
-						}
-					}
-					
-					// Toggle comments
-					for(let i = startLine; i <= endLine; i++) {
-						const line = lines[i];
-						if(allCommented) {
-							// Remove comment
-							lines[i] = line.replace(/^\s*\/\/\s?/, '');
+					if(hasSelection) {
+						// Block comment: wrap selection with /* */
+						const selectedText = value.substring(start, end);
+						const newValue = value.substring(0, start) + '/* ' + selectedText + ' */' + value.substring(end);
+						textarea.value = newValue;
+						textarea.selectionStart = start;
+						textarea.selectionEnd = start + selectedText.length + 5; // "/* " + " */"
+						textarea.dispatchEvent(new Event('input', { bubbles: true }));
+					} else {
+						// Line comment: toggle // on current line, preserving indent
+						const lines = value.split('\n');
+						const lineIndex = value.substring(0, start).split('\n').length - 1;
+						const line = lines[lineIndex];
+						
+						// Get leading whitespace
+						const match = line.match(/^(\s*)/);
+						const indent = match ? match[1] : '';
+						const content = line.substring(indent.length);
+						
+						if(content.startsWith('//')) {
+							// Remove comment: strip leading // and optional space
+							const uncommented = content.startsWith('// ') ? content.substring(3) : content.substring(2);
+							lines[lineIndex] = indent + uncommented;
 						} else {
 							// Add comment
-							const match = line.match(/^(\s*)/);
-							const indent = match ? match[1] : '';
-							lines[i] = indent + '// ' + line.substring(indent.length);
+							lines[lineIndex] = indent + '// ' + content;
 						}
+						
+						const newValue = lines.join('\n');
+						textarea.value = newValue;
+						textarea.selectionStart = start;
+						textarea.selectionEnd = start;
+						textarea.dispatchEvent(new Event('input', { bubbles: true }));
 					}
-					
-					const newValue = lines.join('\n');
-					textarea.value = newValue;
-					textarea.selectionStart = start;
-					textarea.selectionEnd = start + (newValue.length - value.length) + (end - start);
-					textarea.dispatchEvent(new Event('input', { bubbles: true }));
 				}
 				// TAB and SHIFT+TAB for indentation
 				else if(e.key === 'Tab') {
