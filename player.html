@@ -2340,6 +2340,46 @@
 			}catch(err){ console.warn('Load failed',err); }
 		}
 
+		// export/import backup helpers
+		function exportSaveToFile(){
+			try{
+				const state = { objects: objects.map(o=>{
+						const base = {id:o.id,x:o.x,y:o.y,z:o.z,opened:o.opened,collected:o.collected, world:o.world};
+						if(o.contents) base.contents = o.contents;
+						return base;
+					}),
+					player:{x:player.x,y:player.y,z:player.z}, inventory, timestamp: Date.now() };
+				const json = JSON.stringify(state, null, 2);
+				const blob = new Blob([json], {type: 'application/json'});
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `game_backup_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
+				document.body.appendChild(a);
+				a.click();
+				a.remove();
+				URL.revokeObjectURL(url);
+				try{ showPickup('Exported backup'); }catch(e){}
+			}catch(err){ console.warn('Export failed', err); alert('Export failed: '+(err && err.message)); }
+		}
+
+		function importBackupFromObject(state){
+			try{
+				if(!state){ alert('Invalid backup file'); return; }
+				if(!confirm('This will clear all current save data and load the uploaded backup. Continue?')) return;
+				// write cookie with imported state
+				document.cookie = 'game_state=' + encodeURIComponent(JSON.stringify(state)) + ';max-age='+(60*60*24*365)+';path=/';
+				// clear in-memory state to be safe
+				inventory = [];
+				clearObjects();
+				// reset player to values from backup (if present)
+				if(state.player){ player.x = state.player.x || 300; player.y = state.player.y || 100; player.z = state.player.z || 200; }
+				player.vel = {x:0,y:0,z:0};
+				try{ showPickup('Backup loaded — reloading'); }catch(e){}
+				setTimeout(()=>{ location.reload(); }, 300);
+			}catch(err){ console.warn('Import failed',err); alert('Import failed: '+(err && err.message)); }
+		}
+
 		// autosave every minute
 		setInterval(()=>{ saveState(); }, 60 * 1000);
 		// load saved state on start (if present)
@@ -2452,6 +2492,25 @@
 		document.getElementById('resumeBtn').addEventListener('click', ()=>{ paused = false; hidePauseMenu(); lastFrame = performance.now(); });
 		document.getElementById('pauseInventoryBtn').addEventListener('click', ()=>{ inventoryOpen = true; document.getElementById('inventoryPanel').style.display = ''; renderInventory(); });
 		document.getElementById('saveBtn').addEventListener('click', ()=>{ saveState(); });
+		document.getElementById('exportSaveBtn').addEventListener('click', ()=>{ exportSaveToFile(); });
+		document.getElementById('importBackupBtn').addEventListener('click', ()=>{ const f = document.getElementById('importSaveFile'); if(f) f.click(); });
+		// file input handler for importing backup JSON
+		const _importEl = document.getElementById('importSaveFile');
+		if(_importEl){
+			_importEl.addEventListener('change', (ev)=>{
+				const file = ev.target.files && ev.target.files[0];
+				if(!file) return;
+				const reader = new FileReader();
+				reader.onload = ()=>{
+					try{ const state = JSON.parse(reader.result); importBackupFromObject(state); }
+					catch(err){ alert('Failed to parse backup file: ' + (err && err.message)); }
+				};
+				reader.onerror = ()=>{ alert('Failed to read file'); };
+				reader.readAsText(file);
+				// reset to allow selecting same file again
+				ev.target.value = '';
+			});
+		}
 		document.getElementById('newGameBtn').addEventListener('click', ()=>{
 			if(confirm('Clear all save data and start a new game?')){
 				// Clear save data from cookies
