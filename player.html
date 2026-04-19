@@ -2487,6 +2487,47 @@
 			renderList();
 		}
 
+		// give() function: add items to player inventory by id
+		function give(itemId, qty = 1){
+			if(!itemId || qty <= 0) return false;
+			try{
+				let itemClass = null;
+				let existed = false;
+				
+				// map item ids to their constructors
+				const itemClassMap = {
+					'gold': GoldItem,
+					'wood': WoodItem,
+					'axe': AxeItem
+				};
+				
+				// check if item already exists in inventory
+				const existing = inventory.find(it => it.id === itemId);
+				if(existing){
+					existing.qty = (existing.qty || 1) + qty;
+					existed = true;
+				} else {
+					// create new item instance
+					itemClass = itemClassMap[itemId];
+					if(!itemClass){
+						console.warn('Unknown item id:', itemId);
+						return false;
+					}
+					const newItem = new itemClass(qty);
+					inventory.push(newItem);
+				}
+				
+				// update UI and save
+				if(inventoryOpen) renderInventory();
+				showPickup(`${existed ? '+' : ''}${qty} ${itemId}`);
+				saveState();
+				return true;
+			}catch(err){
+				console.warn('give() failed:', err);
+				return false;
+			}
+		}
+
 		// events
 		// pause menu buttons wiring
 		document.getElementById('resumeBtn').addEventListener('click', ()=>{ paused = false; hidePauseMenu(); lastFrame = performance.now(); });
