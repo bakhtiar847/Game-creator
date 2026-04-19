@@ -1826,6 +1826,66 @@ function loopUser(){
 				}
 			});
 
+			// Handle TAB and SHIFT+TAB for indentation
+			codeEditorTextarea.addEventListener('keydown', (e) => {
+				if(e.key === 'Tab') {
+					e.preventDefault();
+					const textarea = codeEditorTextarea;
+					const start = textarea.selectionStart;
+					const end = textarea.selectionEnd;
+					const value = textarea.value;
+					const isShiftTab = e.shiftKey;
+
+					if(isShiftTab) {
+						// SHIFT+TAB: dedent
+						const beforeSelection = value.substring(0, start);
+						const selectedText = value.substring(start, end);
+						const afterSelection = value.substring(end);
+						
+						// Find the start of the line where selection starts
+						let lineStart = beforeSelection.lastIndexOf('\n') + 1;
+						const beforeLine = value.substring(0, lineStart);
+						const lines = selectedText.split('\n');
+						const dedentedLines = lines.map(line => {
+							if(line.startsWith('\t')) return line.substring(1);
+							if(line.startsWith('    ')) return line.substring(4);
+							return line;
+						});
+						
+						const newSelectionText = dedentedLines.join('\n');
+						const newValue = beforeLine + dedentedLines.join('\n') + afterSelection;
+						
+						textarea.value = newValue;
+						textarea.selectionStart = lineStart;
+						textarea.selectionEnd = lineStart + newSelectionText.length;
+						textarea.dispatchEvent(new Event('input', { bubbles: true }));
+					} else {
+						// TAB: indent
+						const beforeSelection = value.substring(0, start);
+						const selectedText = value.substring(start, end);
+						const afterSelection = value.substring(end);
+						
+						if(start === end) {
+							// No selection: just insert tab
+							const newValue = value.substring(0, start) + '\t' + value.substring(end);
+							textarea.value = newValue;
+							textarea.selectionStart = textarea.selectionEnd = start + 1;
+						} else {
+							// Selection: indent all lines
+							const lines = selectedText.split('\n');
+							const indentedLines = lines.map(line => '\t' + line);
+							const newSelectionText = indentedLines.join('\n');
+							const newValue = beforeSelection + newSelectionText + afterSelection;
+							
+							textarea.value = newValue;
+							textarea.selectionStart = start;
+							textarea.selectionEnd = start + newSelectionText.length;
+						}
+						textarea.dispatchEvent(new Event('input', { bubbles: true }));
+					}
+				}
+			});
+
 			// Initial render
 			renderCodeFileTree();
 
