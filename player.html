@@ -1309,7 +1309,8 @@
 			objects.unshift(player);
 		}
 		player.vel = {x:0,y:0,z:0};
-		player.speed = 120; // units per second
+		player.speed = 120; // units per second (walking speed)
+		player.runSpeed = 180; // units per second (running speed with SHIFT)
 		player.radius = 28; // collision radius in world units
 		player.jumpImpulse = 320;
 		player.onGround = false;
