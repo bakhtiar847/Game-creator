@@ -2116,7 +2116,6 @@
 			// desired new position (horizontal) — save previous position for collision resolution
 			const isRunning = keysDown.has('shift');
 			const speed = isRunning ? player.runSpeed : player.speed;
-			const speed = isRunning ? player.runSpeed : player.speed;
 			const prevPos = { x: player.x, y: player.y, z: player.z };
 			const desired = {x: player.x + worldDX * speed * dt, y: player.y, z: player.z + worldDZ * speed * dt};
 
