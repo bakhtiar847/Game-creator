@@ -1376,6 +1376,17 @@
 					updateEquipDisplay();
 				});
 				tb.appendChild(equipBtn);
+				// touch controls button
+				const touchBtn = document.createElement('button'); touchBtn.id = 'touchControlsBtn'; touchBtn.textContent = 'Touch Controls';
+				touchBtn.addEventListener('click', ()=>{
+					const overlay = document.getElementById('mobileControlsOverlay');
+					if(overlay.style.display === 'none' || overlay.style.display === ''){
+						overlay.style.display = 'block';
+					} else {
+						overlay.style.display = 'none';
+					}
+				});
+				tb.appendChild(touchBtn);
 				// add / clear / center buttons moved to toolbar now that overlay is removed
 				const addB = document.createElement('button'); addB.id='addBtn'; addB.textContent='Add Obj'; addB.addEventListener('click', addRandomObject);
 				const clrB = document.createElement('button'); clrB.id='clearBtn'; clrB.textContent='Clear'; clrB.addEventListener('click', clearObjects);
