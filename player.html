@@ -28,6 +28,9 @@
 		.object-color{width:32px;height:32px;border-radius:6px;flex:0 0 32px}
 		.muted{color:var(--muted);font-size:13px}
 		#mobileControlsOverlay{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(2,6,23,0.9);color:#e6eef6;padding:16px 20px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);z-index:35;text-align:center;font-size:14px;display:none}
+		#joystickContainer{position:relative;width:120px;height:120px;margin:0 auto;}
+		#joystickBase{position:absolute;width:100%;height:100%;border-radius:50%;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.2);}
+		#joystickHandle{position:absolute;width:40px;height:40px;border-radius:50%;background:var(--accent);left:50%;top:50%;transform:translate(-50%,-50%);}
 		footer{padding:8px 16px;font-size:13px;color:var(--muted)}
 		@media (max-width:600px){.overlay{position:fixed;left:8px;right:8px;top:auto;bottom:8px;width:auto}}
 	</style>
@@ -85,7 +88,10 @@
 
 		<!-- mobile controls overlay -->
 		<div id="mobileControlsOverlay">
-			📱 Mobile controls are coming soon!
+			<div id="joystickContainer">
+				<div id="joystickBase"></div>
+				<div id="joystickHandle"></div>
+			</div>
 		</div>
 
 		<footer>
@@ -1404,6 +1410,80 @@
 			let name = 'Empty';
 			if(eqIdx != null && inventory[eqIdx]) name = inventory[eqIdx].name || inventory[eqIdx].id;
 			btn.textContent = `Slot ${slotKey}: ${name}`;
+		}
+
+		// Mobile controls setup
+		if (window.innerWidth <= 600 || /Mobi|Android/i.test(navigator.userAgent)) {
+			document.getElementById('mobileControlsOverlay').style.display = 'block';
+		}
+
+		// Joystick variables
+		let joystickActive = false;
+		let joystickCurrentX = 0, joystickCurrentY = 0;
+		const joystickRadius = 50;
+
+		// Joystick elements
+		const joystickContainer = document.getElementById('joystickContainer');
+		const joystickHandle = document.getElementById('joystickHandle');
+
+		// Joystick event listeners
+		joystickContainer.addEventListener('touchstart', (e) => {
+			e.preventDefault();
+			joystickActive = true;
+			joystickCurrentX = 0;
+			joystickCurrentY = 0;
+			updateJoystick();
+		});
+
+		joystickContainer.addEventListener('touchmove', (e) => {
+			if (!joystickActive) return;
+			e.preventDefault();
+			const touch = e.touches[0];
+			const rect = joystickContainer.getBoundingClientRect();
+			let dx = touch.clientX - rect.left - 60;
+			let dy = touch.clientY - rect.top - 60;
+			const dist = Math.sqrt(dx * dx + dy * dy);
+			const running = dist > joystickRadius;
+			if (dist > joystickRadius) {
+				dx = (dx / dist) * joystickRadius;
+				dy = (dy / dist) * joystickRadius;
+			}
+			joystickCurrentX = dx;
+			joystickCurrentY = dy;
+			updateJoystick();
+		});
+
+		joystickContainer.addEventListener('touchend', (e) => {
+			joystickActive = false;
+			joystickCurrentX = 0;
+			joystickCurrentY = 0;
+			updateJoystick();
+		});
+
+		function updateJoystick() {
+			const centerX = 60;
+			const centerY = 60;
+			joystickHandle.style.left = `${centerX + joystickCurrentX - 20}px`;
+			joystickHandle.style.top = `${centerY + joystickCurrentY - 20}px`;
+			joystickHandle.style.transform = 'translate(0,0)';
+			// Update keys
+			const dist = Math.sqrt(joystickCurrentX * joystickCurrentX + joystickCurrentY * joystickCurrentY);
+			const threshold = 10;
+			// Clear previous
+			keysDown.delete('w');
+			keysDown.delete('a');
+			keysDown.delete('s');
+			keysDown.delete('d');
+			keysDown.delete('shift');
+			if (Math.abs(joystickCurrentX) > threshold || Math.abs(joystickCurrentY) > threshold) {
+				if (joystickCurrentY < -threshold) keysDown.add('w');
+				if (joystickCurrentY > threshold) keysDown.add('s');
+				if (joystickCurrentX < -threshold) keysDown.add('a');
+				if (joystickCurrentX > threshold) keysDown.add('d');
+			}
+			if (dist >= joystickRadius - 1) {
+				keysDown.add('shift');
+			}
 		}
 
 		let selectedId = null;
