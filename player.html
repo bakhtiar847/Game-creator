@@ -1992,6 +1992,33 @@
 		 	selectObject(obj.id);
 		});
 
+		// Touch look controls
+		canvas.addEventListener('touchstart', (e) => {
+			if (e.touches.length === 1) {
+				touchLookActive = true;
+				touchCurrentX = e.touches[0].clientX;
+				touchCurrentY = e.touches[0].clientY;
+			}
+		});
+
+		canvas.addEventListener('touchmove', (e) => {
+			if (touchLookActive && e.touches.length === 1) {
+				e.preventDefault();
+				const touch = e.touches[0];
+				const deltaX = touch.clientX - touchCurrentX;
+				const deltaY = touch.clientY - touchCurrentY;
+				const sensitivity = 0.005; // adjust as needed
+				camera.rotY += deltaX * sensitivity;
+				camera.rotX = Math.max(-1.2, Math.min(1.2, camera.rotX + deltaY * sensitivity));
+				touchCurrentX = touch.clientX;
+				touchCurrentY = touch.clientY;
+			}
+		});
+
+		canvas.addEventListener('touchend', (e) => {
+			touchLookActive = false;
+		});
+
 		// pickup toast (temporary overlay when items picked up)
 		function showPickup(text){
 			let el = document.getElementById('pickupToast');
