@@ -352,7 +352,7 @@
 							<div id="assetDropZone" style="border:2px dashed rgba(255,255,255,0.2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .2s">
 								<div style="font-size:32px;margin-bottom:8px">📁</div>
 								<div style="color:#e6eef8;font-weight:600;margin-bottom:4px">Click to browse JSON files</div>
-								<div style="font-size:12px;color:var(--muted)">Files must contain type: 3dasset, InventoryItemAsset, or ToolAsset</div>
+								<div style="font-size:12px;color:var(--muted)">Files must contain type: 3dasset, InventoryItemAsset, ToolAsset, or asset package</div>
 							</div>
 							<input type="file" id="assetFileInput" style="display:none" accept=".json" multiple />
 						</div>
@@ -1408,7 +1408,7 @@ function loopUser(){
 				});
 			}
 
-			let selectedAsset = null;
+			let selectedAssets = [];
 			function findAssetsFolder() {
 				return FileList && FileList[0] && FileList[0].children.find(c => c.name === 'assets');
 			}
@@ -1440,23 +1440,71 @@ function loopUser(){
 				}
 			}
 
-			function renderAssetPreview(entry) {
-				if(!entry) {
+			function renderAssetPreview(selected) {
+				if (!selected || selected.length === 0) {
 					assetsPreviewContent.textContent = 'Select an asset to preview';
 					assetsOpenBtn.disabled = true;
 					assetsDownloadBtn.disabled = true;
 					return;
 				}
-				let previewText = `Name: ${entry.file.name}\nType: ${entry.assetType}\nLocation: assets/${entry.folderName}`;
-				try {
-					const parsed = JSON.parse(entry.file.content || '{}');
-					if(parsed.description) previewText += `\nDescription: ${parsed.description}`;
-				} catch(err) {
-					// ignore parse errors for preview
+				if (selected.length === 1) {
+					const entry = selected[0];
+					let previewText = `Name: ${entry.file.name}\nType: ${entry.assetType}\nLocation: assets/${entry.folderName}`;
+					try {
+						const parsed = JSON.parse(entry.file.content || '{}');
+						if(parsed.description) previewText += `\nDescription: ${parsed.description}`;
+					} catch(err) {
+						// ignore
+					}
+					assetsPreviewContent.textContent = previewText;
+					assetsOpenBtn.disabled = false;
+					assetsDownloadBtn.disabled = false;
+				} else {
+					assetsPreviewContent.innerHTML = `<div style="text-align:center;padding:20px;"><strong>${selected.length} assets selected</strong><br><br><button id="deleteSelectedBtn" style="padding:10px 16px;background:#dc3545;border:none;border-radius:6px;color:white;cursor:pointer;margin-right:10px;">Delete Selected</button><button id="downloadPackageBtn" style="padding:10px 16px;background:var(--accent);border:none;border-radius:6px;color:#032024;cursor:pointer;">Download as Package</button></div>`;
+					assetsOpenBtn.disabled = true;
+					assetsDownloadBtn.disabled = true;
+					setTimeout(() => {
+						const deleteBtn = document.getElementById('deleteSelectedBtn');
+						const downloadBtn = document.getElementById('downloadPackageBtn');
+						if (deleteBtn) deleteBtn.addEventListener('click', () => deleteSelectedAssets(selected));
+						if (downloadBtn) downloadBtn.addEventListener('click', () => downloadSelectedAsPackage(selected));
+					}, 0);
 				}
-				assetsPreviewContent.textContent = previewText;
-				assetsOpenBtn.disabled = false;
-				assetsDownloadBtn.disabled = false;
+			}
+
+			function deleteSelectedAssets(selected) {
+				const assetsFolder = findAssetsFolder();
+				if (!assetsFolder) return;
+				selected.forEach(entry => {
+					const subFolder = assetsFolder.children.find(c => c.name === entry.folderName);
+					if (subFolder) {
+						const index = subFolder.children.findIndex(f => f.name === entry.file.name);
+						if (index > -1) {
+							subFolder.children.splice(index, 1);
+						}
+					}
+				});
+				selectedAssets = [];
+				renderAssetsGrid();
+				saveProjectToStorage();
+			}
+
+			function downloadSelectedAsPackage(selected) {
+				const packageData = {
+					type: "asset package",
+					content: selected.map(entry => ({
+						name: entry.file.name,
+						type: entry.assetType,
+						content: entry.file.content
+					}))
+				};
+				const blob = new Blob([JSON.stringify(packageData, null, 2)], {type: 'application/json'});
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = 'asset_package.json';
+				a.click();
+				URL.revokeObjectURL(url);
 			}
 
 			function renderAssetsGrid() {
@@ -1471,8 +1519,8 @@ function loopUser(){
 				});
 				if(entries.length === 0) {
 					assetsGrid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px;">No assets found.</div>';
-					selectedAsset = null;
-					renderAssetPreview(null);
+					selectedAssets = [];
+					renderAssetPreview(selectedAssets);
 					return;
 				}
 				for(const entry of entries) {
@@ -1482,16 +1530,27 @@ function loopUser(){
 					item.dataset.assetFolder = entry.folderName;
 					item.dataset.assetType = entry.assetType;
 					item.innerHTML = `<div class="asset-thumb"></div><div style="font-size:12px">${entry.file.name}</div><div class="muted" style="font-size:10px">${assetTypeLabel(entry.folderName)}</div>`;
-					item.addEventListener('click', () => {
-						document.querySelectorAll('.asset-item').forEach(el => el.classList.remove('selected'));
-						item.classList.add('selected');
-						selectedAsset = entry;
-						renderAssetPreview(entry);
+					item.addEventListener('click', (event) => {
+						if (event.ctrlKey) {
+							const index = selectedAssets.findIndex(s => s.file.name === entry.file.name && s.folderName === entry.folderName);
+							if (index > -1) {
+								selectedAssets.splice(index, 1);
+							} else {
+								selectedAssets.push(entry);
+							}
+						} else {
+							selectedAssets = [entry];
+						}
+						document.querySelectorAll('.asset-item').forEach(el => {
+							const isSelected = selectedAssets.some(s => s.file.name === el.dataset.assetName && s.folderName === el.dataset.assetFolder);
+							el.classList.toggle('selected', isSelected);
+						});
+						renderAssetPreview(selectedAssets);
 					});
 					assetsGrid.appendChild(item);
 				}
-				selectedAsset = null;
-				renderAssetPreview(null);
+				selectedAssets = [];
+				renderAssetPreview(selectedAssets);
 			}
 
 			assetSearch.addEventListener('input', renderAssetsGrid);
@@ -1499,17 +1558,17 @@ function loopUser(){
 			renderAssetsGrid();
 
 			assetsOpenBtn.addEventListener('click', () => {
-				if(!selectedAsset) return;
-				window.loadAssetIntoEditor && window.loadAssetIntoEditor(selectedAsset);
+				if (selectedAssets.length !== 1) return;
+				window.loadAssetIntoEditor && window.loadAssetIntoEditor(selectedAssets[0]);
 			});
 
 			assetsDownloadBtn.addEventListener('click', () => {
-				if(!selectedAsset) return;
-				const blob = new Blob([selectedAsset.file.content || ''], { type: 'application/json' });
+				if (selectedAssets.length !== 1) return;
+				const blob = new Blob([selectedAssets[0].file.content || ''], { type: 'application/json' });
 				const url = URL.createObjectURL(blob);
 				const link = document.createElement('a');
 				link.href = url;
-				link.download = `${selectedAsset.file.name}.json`;
+				link.download = `${selectedAssets[0].file.name}.json`;
 				link.click();
 				URL.revokeObjectURL(url);
 			});
