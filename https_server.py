@@ -7,6 +7,7 @@ class HTTPServer(socketserver.TCPServer):
         self.allow_reuse_address = True
         super().__init__(server_address, RequestHandlerClass, bind_and_activate)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(certfile="cert.pem", keyfile="key.pem")
         self.socket = context.wrap_socket(self.socket, server_side=True)
 
