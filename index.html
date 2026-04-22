@@ -1205,15 +1205,49 @@ function loopUser(){
 					reader.onload = () => {
 						try {
 							const parsed = JSON.parse(reader.result);
-							const type = getTypeFromJson(parsed);
-							if(!['3dasset','InventoryItemAsset','ToolAsset'].includes(type)) {
-								result.status = 'error';
-								result.message = `Invalid or missing type field: ${type || 'none'}`;
+							if (parsed.type === 'asset package') {
+								// Remove the package result
+								results.splice(results.indexOf(result), 1);
+								if (!Array.isArray(parsed.content)) {
+									results.push({ fileName: file.name, status: 'error', message: 'Asset package content is not an array' });
+								} else {
+									parsed.content.forEach(asset => {
+										const assetResult = { fileName: `${file.name} -> ${asset.name || 'Unnamed'}`, status: 'pending', message: 'Processing asset...' };
+										results.push(assetResult);
+										if (!asset.name || !asset.type || asset.content === undefined) {
+											assetResult.status = 'error';
+											assetResult.message = 'Missing required properties: name, type, content';
+										} else if (asset.type === 'asset package') {
+											assetResult.status = 'error';
+											assetResult.message = 'Nested asset packages not allowed';
+										} else if (!['3dasset','InventoryItemAsset','ToolAsset'].includes(asset.type)) {
+											assetResult.status = 'error';
+											assetResult.message = `Invalid asset type: ${asset.type}`;
+										} else {
+											const folder = getAssetFolderByType(asset.type);
+											if (!folder) {
+												assetResult.status = 'error';
+												assetResult.message = `Unknown asset type folder for ${asset.type}`;
+											} else {
+												const uniqueName = getUniqueAssetName(folder, asset.name);
+												addAssetFileToProject(uniqueName, asset.type, typeof asset.content === 'string' ? asset.content : JSON.stringify(asset.content, null, 2));
+												assetResult.status = 'success';
+												assetResult.message = `Imported as ${asset.type} in assets/${assetTypeFolderMap[asset.type]}`;
+											}
+										}
+									});
+								}
 							} else {
-								const assetName = parsed.name || file.name.replace(/\.json$/i, '') || 'New Asset';
-								addAssetFileToProject(assetName, type, JSON.stringify(parsed, null, 2));
-								result.status = 'success';
-								result.message = `Imported as ${type} in assets/${assetTypeFolderMap[type]}`;
+								const type = getTypeFromJson(parsed);
+								if(!['3dasset','InventoryItemAsset','ToolAsset'].includes(type)) {
+									result.status = 'error';
+									result.message = `Invalid or missing type field: ${type || 'none'}`;
+								} else {
+									const assetName = parsed.name || file.name.replace(/\.json$/i, '') || 'New Asset';
+									addAssetFileToProject(assetName, type, JSON.stringify(parsed, null, 2));
+									result.status = 'success';
+									result.message = `Imported as ${type} in assets/${assetTypeFolderMap[type]}`;
+								}
 							}
 						} catch(err) {
 							result.status = 'error';
